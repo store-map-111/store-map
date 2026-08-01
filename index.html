@@ -1,0 +1,2049 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1677ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>门店信息管理系统</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif; height: 100vh; overflow: hidden; background: #f0f2f5; }
+
+/* 顶部导航 */
+.header { height: 56px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); z-index: 100; position: relative; }
+.header h1 { font-size: 18px; color: #1a1a1a; font-weight: 600; }
+.header-actions { display: flex; gap: 8px; }
+
+/* 按钮样式 */
+.btn { padding: 8px 16px; border: 1px solid #d9d9d9; border-radius: 6px; cursor: pointer; font-size: 14px; background: #fff; color: #333; transition: all .2s; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { border-color: #1677ff; color: #1677ff; }
+.btn-primary { background: #1677ff; color: #fff; border-color: #1677ff; }
+.btn-primary:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
+.btn-danger { color: #ff4d4f; border-color: #ff4d4f; }
+.btn-danger:hover { background: #ff4d4f; color: #fff; }
+.btn-sm { padding: 4px 12px; font-size: 13px; }
+
+/* 主体布局 */
+.main { display: flex; height: calc(100vh - 56px); }
+
+/* 侧边栏 */
+.sidebar { width: 340px; background: #fff; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; flex-shrink: 0; transition: width .3s; }
+.sidebar.collapsed { width: 0; overflow: hidden; border: none; }
+.sidebar-header { padding: 16px; border-bottom: 1px solid #f0f0f0; }
+.sidebar-header h3 { font-size: 15px; color: #333; margin-bottom: 12px; }
+.sidebar-actions { display:flex; gap:6px; margin-top:8px; }
+.sidebar-actions button { flex:1; padding:4px 0; font-size:12px; border:1px solid #d9d9d9; border-radius:4px; background:#fff; cursor:pointer; color:#666; }
+.sidebar-actions button:hover { background:#f5f5f5; color:#333; }
+.search-box { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; outline: none; transition: border-color .2s; }
+.search-box:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,.1); }
+.store-list { flex: 1; overflow-y: auto; padding: 8px; }
+.store-item { padding: 12px; border-radius: 8px; cursor: pointer; transition: background .2s; margin-bottom: 4px; border: 1px solid transparent; }
+.store-item:hover { background: #f5f7fa; }
+.store-item.active { background: #e6f4ff; border-color: #91caff; }
+.store-item-name { font-size: 14px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+.store-item-info { font-size: 12px; color: #999; display: flex; gap: 12px; }
+.store-item-tag { display: inline-block; padding: 1px 6px; background: #f0f5ff; color: #1677ff; border-radius: 4px; font-size: 11px; margin-top: 4px; }
+.store-count { padding: 12px 16px; font-size: 13px; color: #999; border-top: 1px solid #f0f0f0; text-align: center; }
+
+/* 地图容器 */
+.map-container { flex: 1; position: relative; }
+#map { width: 100%; height: 100%; }
+
+/* 地图提示 */
+.map-tip { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.7); color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 13px; z-index: 10; pointer-events: none; transition: opacity .3s; }
+
+/* 地图地址搜索 */
+.map-search-box { position: absolute; top: 12px; right: 12px; z-index: 10; width: 260px; }
+.map-search-input { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 13px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.12); outline: none; box-sizing: border-box; }
+.map-search-input:focus { border-color: #1677ff; box-shadow: 0 2px 8px rgba(22,119,255,.2); }
+.map-search-results { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,.12); max-height: 240px; overflow-y: auto; display: none; }
+.map-search-results.show { display: block; }
+.map-search-item { padding: 10px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+.map-search-item:hover { background: #f5f7fa; }
+.map-search-item:last-child { border-bottom: none; }
+.map-search-item .addr-name { font-weight: 500; color: #1a1a1a; }
+.map-search-item .addr-detail { font-size: 11px; color: #999; margin-top: 2px; }
+
+/* 弹窗遮罩 */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all .3s; }
+.modal-overlay.show { opacity: 1; visibility: visible; }
+
+/* 弹窗 */
+.modal { background: #fff; border-radius: 12px; width: 520px; max-height: 85vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.15); transform: scale(.9); transition: transform .3s; }
+.modal-overlay.show .modal { transform: scale(1); }
+.modal-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+.modal-header h2 { font-size: 17px; color: #1a1a1a; }
+.modal-close { width: 32px; height: 32px; border: none; background: none; cursor: pointer; font-size: 18px; color: #999; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.modal-close:hover { background: #f5f5f5; color: #333; }
+.modal-body { padding: 20px 24px; }
+.modal-footer { padding: 0 24px 20px; display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 表单 */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; font-weight: 500; }
+.form-label .required { color: #ff4d4f; margin-right: 2px; }
+.form-input { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; outline: none; transition: border-color .2s; }
+.form-input:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,.1); }
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; }
+textarea.form-input { resize: vertical; min-height: 60px; }
+
+/* 门店详情卡片 */
+.detail-card { padding: 4px 0; }
+.detail-row { display: flex; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
+.detail-row:last-child { border: none; }
+.detail-label { width: 80px; color: #999; font-size: 13px; flex-shrink: 0; }
+.detail-value { color: #333; font-size: 13px; }
+
+/* 设置弹窗 */
+.settings-content { padding: 4px 0; }
+.settings-tip { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 13px; color: #666; line-height: 1.6; }
+.settings-tip a { color: #1677ff; }
+
+/* 空状态 */
+.empty-state { text-align: center; padding: 40px 20px; color: #bbb; }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* 统计卡片 */
+.stats-bar { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; }
+.stat-item { flex: 1; text-align: center; padding: 8px; background: #fafafa; border-radius: 8px; }
+.stat-num { font-size: 20px; font-weight: 600; color: #1677ff; }
+.stat-label { font-size: 11px; color: #999; margin-top: 2px; }
+
+/* 图标样式选择 */
+.icon-style-btn { width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border:2px solid #d9d9d9; border-radius:6px; cursor:pointer; font-size:18px; transition:all .2s; background:#fff; }
+.icon-style-btn:hover { border-color:#1677ff; }
+.icon-style-btn.active { border-color:#1677ff; background:#e6f4ff; }
+.icon-custom-wrap { display:inline-flex; align-items:center; gap:6px; }
+.icon-custom-preview { width:34px; height:34px; border:2px solid #d9d9d9; border-radius:6px; object-fit:contain; background:#fff; }
+
+/* 图标选择器 */
+.icon-picker { position:fixed; background:#fff; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.18); z-index:3000; padding:12px; min-width:200px; display:none; }
+.icon-picker.show { display:block; }
+.icon-picker-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+.icon-picker-item { width:42px; height:42px; border:2px solid #e8e8e8; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:22px; transition:all .2s; background:#fff; position:relative; }
+.icon-picker-item:hover { border-color:#1677ff; background:#f0f5ff; }
+.icon-picker-item.active { border-color:#1677ff; background:#e6f4ff; }
+.icon-picker-item img { width:32px; height:32px; object-fit:contain; }
+.icon-picker-item .del-icon { position:absolute; top:-6px; right:-6px; width:16px; height:16px; background:#ff4d4f; color:#fff; border-radius:50%; font-size:10px; display:none; align-items:center; justify-content:center; cursor:pointer; line-height:16px; text-align:center; }
+.icon-picker-item:hover .del-icon { display:flex; }
+.icon-picker-upload { width:42px; height:42px; border:2px dashed #d9d9d9; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:20px; color:#999; transition:all .2s; background:#fafafa; }
+.icon-picker-upload:hover { border-color:#1677ff; color:#1677ff; }
+
+/* 去掉高德地图标注标签默认蓝框 */
+.amap-marker-label { border:none !important; background:transparent !important; }
+
+/* 分类树 */
+.cat-group { margin-bottom: 2px; }
+.cat-header { display: flex; align-items: center; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background .2s; user-select: none; }
+.cat-header:hover { background: #f5f7fa; }
+.cat-header.cat-visible { background: #e6f4ff; }
+.cat-header.cat-visible .cat-name { color: #1677ff; }
+.cat-arrow { width: 18px; font-size: 10px; color: #999; transition: transform .2s; flex-shrink: 0; text-align: center; }
+.cat-arrow.open { transform: rotate(90deg); }
+.cat-name { flex: 1; font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-count { font-size: 11px; color: #999; margin-left: 6px; flex-shrink: 0; }
+.cat-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .2s; }
+.cat-header:hover .cat-actions { opacity: 1; }
+.cat-action-btn { width: 22px; height: 22px; border: none; background: none; cursor: pointer; font-size: 12px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999; }
+.cat-action-btn:hover { background: #e6f4ff; color: #1677ff; }
+.cat-children { padding-left: 16px; overflow: hidden; transition: max-height .3s; }
+.cat-children.collapsed { max-height: 0 !important; }
+.cat-sub { margin-bottom: 2px; }
+.cat-sub .cat-header { padding-left: 8px; }
+.cat-sub .cat-name { font-weight: 500; font-size: 12px; color: #666; }
+
+/* 分类下的门店 */
+.cat-store-item { padding: 8px 10px 8px 20px; border-radius: 6px; cursor: pointer; transition: background .2s; margin-bottom: 2px; border: 1px solid transparent; }
+.cat-store-item:hover { background: #f5f7fa; }
+.cat-store-item.active { background: #e6f4ff; border-color: #91caff; }
+.cat-store-item.visible { background: #f0f9ff; border-left: 3px solid #1677ff; }
+.cat-store-item.dragging { opacity: 0.4; }
+.cat-store-item.drag-over { border-top: 2px solid #1677ff; }
+.cat-store-name { font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 2px; }
+.cat-store-info { font-size: 11px; color: #999; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+
+/* 未分类区域 */
+.uncat-header { display: flex; align-items: center; padding: 8px 10px; border-radius: 6px; cursor: pointer; border-top: 1px solid #f0f0f0; margin-top: 4px; }
+.uncat-header:hover { background: #f5f7fa; }
+.uncat-name { flex: 1; font-size: 13px; font-weight: 600; color: #999; }
+
+/* 添加分类按钮 */
+.add-cat-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 8px; margin: 4px 8px; border: 1px dashed #d9d9d9; border-radius: 6px; cursor: pointer; font-size: 12px; color: #999; transition: all .2s; }
+.add-cat-btn:hover { border-color: #1677ff; color: #1677ff; background: #f0f5ff; }
+
+/* 右键菜单 */
+.context-menu { position: fixed; background: #fff; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.15); z-index: 3000; min-width: 160px; padding: 4px; display: none; }
+.context-menu.show { display: block; }
+.ctx-item { padding: 8px 12px; font-size: 13px; color: #333; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+.ctx-item:hover { background: #f5f7fa; }
+.ctx-item.danger { color: #ff4d4f; }
+.ctx-item.danger:hover { background: #fff1f0; }
+.ctx-divider { height: 1px; background: #f0f0f0; margin: 4px 0; }
+.ctx-sub-label { padding: 4px 12px; font-size: 11px; color: #999; }
+
+/* 分类选择下拉 */
+.cat-select-wrap { position: relative; }
+.cat-select-trigger { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; cursor: pointer; background: #fff; display: flex; align-items: center; justify-content: space-between; transition: border-color .2s; }
+.cat-select-trigger:hover { border-color: #1677ff; }
+.cat-select-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #d9d9d9; border-radius: 6px; box-shadow: 0 6px 16px rgba(0,0,0,.1); z-index: 100; max-height: 200px; overflow-y: auto; display: none; margin-top: 4px; }
+.cat-select-dropdown.show { display: block; }
+.cat-select-option { padding: 8px 12px; font-size: 13px; cursor: pointer; transition: background .2s; }
+.cat-select-option:hover { background: #f5f7fa; }
+.cat-select-option.selected { background: #e6f4ff; color: #1677ff; }
+.cat-select-option.sub { padding-left: 28px; font-size: 12px; color: #666; }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #bbb; }
+
+/* 消息提示 */
+.toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-20px); background: #fff; padding: 12px 24px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); z-index: 2000; font-size: 14px; opacity: 0; transition: all .3s; display: flex; align-items: center; gap: 8px; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-left: 3px solid #52c41a; }
+.toast.error { border-left: 3px solid #ff4d4f; }
+.toast.info { border-left: 3px solid #1677ff; }
+
+/* 登录页面 */
+.login-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.login-box { background: #fff; border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.login-box h2 { text-align: center; font-size: 20px; color: #1a1a1a; margin-bottom: 8px; }
+.login-box .login-sub { text-align: center; font-size: 13px; color: #999; margin-bottom: 28px; }
+.login-box .form-group { margin-bottom: 18px; }
+.login-box .form-label { font-size: 13px; color: #666; margin-bottom: 6px; font-weight: 500; }
+.login-box .form-input { width: 100%; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; outline: none; transition: border-color .2s; }
+.login-box .form-input:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,.1); }
+.login-box .login-btn { width: 100%; padding: 12px; background: #1677ff; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; transition: background .2s; margin-top: 8px; }
+.login-box .login-btn:hover { background: #4096ff; }
+.login-box .login-error { color: #ff4d4f; font-size: 13px; text-align: center; margin-top: 12px; min-height: 20px; }
+
+/* 手机端适配 */
+.sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.4); z-index: 199; display: none; }
+.sidebar-overlay.show { display: block; }
+@media (max-width: 768px) {
+  .header { height: 48px; padding: 0 10px; }
+  .header h1 { font-size: 14px; white-space: nowrap; }
+  .header-actions { gap: 4px; }
+  .header-actions .btn { padding: 6px 8px; font-size: 12px; }
+  .header-actions .btn span.btn-text { display: none; }
+  .main { height: calc(100vh - 48px); }
+  .sidebar {
+    position: fixed; top: 48px; left: 0; bottom: 0; z-index: 200;
+    width: 300px !important; box-shadow: 4px 0 20px rgba(0,0,0,.15);
+    transform: translateX(-100%); transition: transform .3s;
+  }
+  .sidebar.mobile-show { transform: translateX(0); }
+  .sidebar.collapsed { width: 300px !important; transform: translateX(-100%); }
+  .map-container { width: 100% !important; }
+  .map-search-box { width: 200px; right: 8px; top: 8px; }
+  .modal { width: 95vw !important; max-width: 480px; margin: 10px; }
+  .form-row { flex-direction: column; gap: 0; }
+  .stats-bar { padding: 8px 10px; }
+  .toast { top: 56px; font-size: 13px; padding: 10px 16px; }
+}
+</style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- 顶部 -->
+<div class="header">
+  <h1>🏪 门店信息管理系统</h1>
+  <div class="header-actions">
+    <button class="btn" onclick="toggleSidebar()">☰ <span class="btn-text">门店列表</span></button>
+    <button class="btn" onclick="exportData()">📤 <span class="btn-text">导出备份</span></button>
+    <button class="btn" onclick="exportExcel()">📊 <span class="btn-text">导出Excel</span></button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">📥 <span class="btn-text">导入恢复</span></button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="btn" onclick="showBackupModal()">✕ <span class="btn-text">关闭</span></button>
+    <button class="btn" onclick="showSettings()">⚙️ <span class="btn-text">设置</span></button>
+  </div>
+</div>
+
+<!-- 主体 -->
+<div class="main">
+  <!-- 侧边栏 -->
+  <div class="sidebar" id="sidebar">
+    <div class="stats-bar" id="statsBar" style="flex-wrap:wrap;gap:6px;padding:10px 16px;">
+      <div id="statBrands" style="display:flex;flex-wrap:wrap;gap:6px;width:100%"></div>
+    </div>
+    <div class="sidebar-header">
+      <input class="search-box" type="text" placeholder="🔍 搜索门店名称..." oninput="filterStores(this.value)">
+      <div class="sidebar-actions">
+        <button onclick="expandAllCats()"> 全部展开</button>
+        <button onclick="collapseAllCats()"> 全部折叠</button>
+      </div>
+    </div>
+    <div class="store-list" id="storeList">
+      <div class="empty-state"><div class="icon">📋</div><p>暂无门店数据<br>点击地图添加门店</p></div>
+    </div>
+    <div class="add-cat-btn" onclick="showAddCategory()">＋ 新建分类</div>
+    <div class="store-count" id="storeCount">共 0 家门店</div>
+  </div>
+
+  <!-- 右键菜单 -->
+  <div class="context-menu" id="contextMenu"></div>
+
+  <!-- 地图 -->
+  <div class="map-container">
+    <div id="map"></div>
+    <div class="map-tip" id="mapTip" style="opacity:0">💡 点击地图空白处添加门店</div>
+    <div class="map-search-box">
+      <input class="map-search-input" id="mapSearchInput" placeholder="🔍 搜索地址/地点..." autocomplete="off">
+      <div class="map-search-results" id="mapSearchResults"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 新增/编辑门店弹窗 -->
+<div class="modal-overlay" id="storeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">新增门店</h2>
+      <button class="modal-close" onclick="closeModal('storeModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="storeId">
+      <input type="hidden" id="storeIconStyle" value="pin">
+      <input type="hidden" id="storeCustomIcon" value="">
+      <div class="form-group">
+        <label class="form-label"><span class="required">*</span>门店名称</label>
+        <input class="form-input" id="storeName" placeholder="请输入门店名称">
+      </div>
+      <div class="form-group">
+        <label class="form-label">品牌/连锁名称</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="form-input" id="storeBrand" placeholder="如：瑞幸咖啡、星巴克、蜜雪冰城" style="flex:1" oninput="updateBrandColorPreview()">
+          <div id="brandColorPreview" style="width:28px;height:28px;border-radius:6px;border:2px solid #d9d9d9;flex-shrink:0;display:none;"></div>
+          <div id="brandColorSwatches" style="display:flex;gap:4px;">
+            <span style="width:22px;height:22px;border-radius:4px;background:#1677ff;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#1677ff')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#ff4d4f;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#ff4d4f')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#52c41a;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#52c41a')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#fa8c16;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#fa8c16')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#722ed1;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#722ed1')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#13c2c2;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#13c2c2')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#eb2f96;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#eb2f96')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#faad14;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#faad14')"></span>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">门店地址</label>
+        <input class="form-input" id="storeAddress" placeholder="自动获取，可手动修改">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">面积(㎡)</label>
+          <input class="form-input" id="storeArea" type="number" placeholder="如：120">
+        </div>
+        <div class="form-group">
+          <label class="form-label">不含税年租金(元)</label>
+          <input class="form-input" id="storeRent" type="number" placeholder="如：240000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">含税年租金(元)</label>
+          <input class="form-input" id="storeRentTax" type="number" placeholder="如：254400">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">租期开始</label>
+          <input class="form-input" id="storeLeaseStart" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">租期结束</label>
+          <input class="form-input" id="storeLeaseEnd" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">门店类型</label>
+          <select class="form-input" id="storeType" onchange="toggleSubType()">
+            <option value="">请选择</option>
+            <option value="直营店">直营店</option>
+            <option value="加盟店">加盟店</option>
+            <option value="竞争对手">竞争对手</option>
+            <option value="潜在收购对象">潜在收购对象</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="subTypeRow" style="display:none">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">直营店类型</label>
+          <select class="form-input" id="storeSubType">
+            <option value="">请选择</option>
+            <option value="旗舰店">旗舰店</option>
+            <option value="商业街区店">商业街区店</option>
+            <option value="社区大店">社区大店</option>
+            <option value="社区小店">社区小店</option>
+            <option value="院边店">院边店</option>
+            <option value="乡镇店">乡镇店</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">标注颜色</label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="color" id="storeColor" value="#1677ff" style="width:40px;height:36px;border:1px solid #d9d9d9;border-radius:6px;cursor:pointer;padding:2px;">
+            <div style="display:flex;gap:4px;">
+              <span onclick="document.getElementById('storeColor').value='#1677ff'" style="width:22px;height:22px;background:#1677ff;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+              <span onclick="document.getElementById('storeColor').value='#f5222d'" style="width:22px;height:22px;background:#f5222d;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+              <span onclick="document.getElementById('storeColor').value='#52c41a'" style="width:22px;height:22px;background:#52c41a;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+              <span onclick="document.getElementById('storeColor').value='#fa8c16'" style="width:22px;height:22px;background:#fa8c16;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+              <span onclick="document.getElementById('storeColor').value='#722ed1'" style="width:22px;height:22px;background:#722ed1;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="flex:2">
+          <label class="form-label">图标样式</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <span class="icon-style-btn active" data-style="pin" onclick="selectIconStyle(this)" title="水滴">📍</span>
+            <span class="icon-style-btn" data-style="star" onclick="selectIconStyle(this)" title="星星">⭐</span>
+            <span class="icon-style-btn" data-style="square" onclick="selectIconStyle(this)" title="方形">⬛</span>
+            <span class="icon-style-btn" data-style="diamond" onclick="selectIconStyle(this)" title="菱形">🔷</span>
+            <span class="icon-style-btn" data-style="flag" onclick="selectIconStyle(this)" title="旗帜">🚩</span>
+            <span class="icon-style-btn" data-style="circle" onclick="selectIconStyle(this)" title="圆形">⭕</span>
+            <span class="icon-style-btn" data-style="triangle" onclick="selectIconStyle(this)" title="三角">🔺</span>
+            <span class="icon-style-btn" data-style="custom" onclick="selectIconStyle(this);showIconPicker(this);" title="选择自定义图标">📁</span>
+            <input type="file" id="customIconFile" accept="image/*" style="display:none" onchange="handleCustomIcon(event)">
+            <img id="customIconPreview" class="icon-custom-preview" style="display:none" title="自定义图标">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">所属分类</label>
+        <div class="cat-select-wrap" id="catSelectWrap">
+          <div class="cat-select-trigger" onclick="toggleCatSelect()">
+            <span id="catSelectText">未分类</span>
+            <span>▾</span>
+          </div>
+          <div class="cat-select-dropdown" id="catSelectDropdown"></div>
+        </div>
+        <input type="hidden" id="storeCategoryId" value="">
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注</label>
+        <textarea class="form-input" id="storeRemark" placeholder="其他需要记录的信息..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('storeModal')">取消</button>
+      <button class="btn btn-danger" id="btnDelete" style="display:none" onclick="deleteStore()">删除</button>
+      <button class="btn btn-primary" onclick="saveStore()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 门店详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="detailTitle">门店详情</h2>
+      <button class="modal-close" onclick="closeModal('detailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('detailModal')">关闭</button>
+      <button class="btn btn-primary" id="btnEdit" onclick="">编辑</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <h2>⚙️ 地图设置</h2>
+      <button class="modal-close" onclick="closeModal('settingsModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-tip">
+        💡 使用前需要先获取高德地图 Key（免费）：<br>
+        1. 访问 <a href="https://console.amap.com/dev/key/app" target="_blank">高德开放平台</a> 注册账号<br>
+        2. 创建应用 → 添加 Key → Web端(JS API)类型<br>
+        3. 将获取到的 Key 填入下方
+      </div>
+      <div class="form-group">
+        <label class="form-label">高德地图 Key</label>
+        <input class="form-input" id="amapKey" placeholder="请输入您的高德地图 Key">
+      </div>
+      <div class="form-group">
+        <label class="form-label">安全密钥 (JSAPI Security Key)</label>
+        <input class="form-input" id="amapSecret" placeholder="请输入安全密钥">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('settingsModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveSettings()">保存并刷新</button>
+    </div>
+  </div>
+</div>
+
+<!-- 分类管理弹窗 -->
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <h2 id="catModalTitle">新建分类</h2>
+      <button class="modal-close" onclick="closeModal('categoryModal')"></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label"><span class="required">*</span>分类名称</label>
+        <input class="form-input" id="catName" placeholder="如：张掖市、瑞幸咖啡、竞争对手">
+      </div>
+      <div class="form-group">
+        <label class="form-label">上级分类（留空则为一级分类）</label>
+        <select class="form-input" id="catParent">
+          <option value="">无（作为一级分类）</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btnDeleteCat" style="display:none" onclick="deleteCategory()">删除</button>
+      <button class="btn" onclick="closeModal('categoryModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveCategory()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 关闭备份弹窗 -->
+<div class="modal-overlay" id="backupModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h2>💾 数据备份提醒</h2>
+    </div>
+    <div class="modal-body" style="text-align:center;padding:30px 24px;">
+      <div style="font-size:48px;margin-bottom:16px;">📤</div>
+      <p style="font-size:15px;color:#333;margin-bottom:8px;">即将关闭页面，请先备份数据！</p>
+      <p style="font-size:13px;color:#999;">点击导出后文件将保存到浏览器默认下载目录<br>建议将浏览器下载路径设置为 <b>E:\门店信息管理系统备份</b></p>
+    </div>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="btn btn-primary" onclick="doBackupAndClose()" style="padding:10px 32px;font-size:15px;">📤 立即备份并关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 消息提示 -->
+<div class="toast" id="toast"></div>
+
+<!-- 图标选择器弹窗 -->
+<div class="icon-picker" id="iconPicker">
+  <div style="font-size:13px;color:#666;margin-bottom:8px;">选择图标</div>
+  <div class="icon-picker-grid" id="iconPickerGrid"></div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <div class="icon-picker-upload" onclick="document.getElementById('iconPickerFile').click()" title="上传新图标">＋</div>
+    <input type="file" id="iconPickerFile" accept="image/*" style="display:none" onchange="handleIconPickerUpload(event)">
+    <span style="font-size:11px;color:#999;">点击上传新图标</span>
+  </div>
+</div>
+
+<script>
+// ========== 登录验证 ==========
+const LOGIN_USER = 'admin';
+const LOGIN_PASS = 'system';
+let loginAttempts = 0;
+const MAX_ATTEMPTS = 10;
+let lockoutUntil = parseInt(sessionStorage.getItem('lockoutUntil') || '0');
+
+// 动态创建登录遮罩
+function createLoginOverlay() {
+  const overlay = document.createElement('div');
+  overlay.className = 'login-overlay';
+  overlay.id = 'loginOverlay';
+  overlay.innerHTML = `
+    <div class="login-box">
+      <h2>🏪 门店信息管理系统</h2>
+      <p class="login-sub">请输入账号密码登录</p>
+      <div class="form-group">
+        <label class="form-label">账号</label>
+        <input class="form-input" id="loginUser" placeholder="请输入账号" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">密码</label>
+        <input class="form-input" id="loginPass" type="password" placeholder="请输入密码" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="login-btn" onclick="doLogin()">登 录</button>
+      <div class="login-error" id="loginError"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function checkLoginState() {
+  if (sessionStorage.getItem('loggedIn') === '1') {
+    const overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.remove();
+    return true;
+  }
+  createLoginOverlay();
+  return false;
+}
+
+function doLogin() {
+  const now = Date.now();
+  if (now < lockoutUntil) {
+    const mins = Math.ceil((lockoutUntil - now) / 60000);
+    document.getElementById('loginError').textContent = `账号已锁定，请${mins}分钟后再试`;
+    return;
+  }
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  if (user === LOGIN_USER && pass === LOGIN_PASS) {
+    sessionStorage.setItem('loggedIn', '1');
+    sessionStorage.removeItem('lockoutUntil');
+    const overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.remove();
+    // 延迟初始化地图，等浏览器完成布局重排
+    setTimeout(() => {
+      console.log('[登录] 登录成功，开始初始化地图');
+      initMap();
+    }, 300);
+  } else {
+    loginAttempts++;
+    if (loginAttempts >= MAX_ATTEMPTS) {
+      lockoutUntil = now + 60 * 60 * 1000;
+      sessionStorage.setItem('lockoutUntil', lockoutUntil.toString());
+      document.getElementById('loginError').textContent = '失败次数过多，账号已锁定1小时';
+    } else {
+      document.getElementById('loginError').textContent = `账号或密码错误（还剩${MAX_ATTEMPTS - loginAttempts}次机会）`;
+    }
+    document.getElementById('loginPass').value = '';
+  }
+}
+
+// ========== 全局变量 ==========
+let map = null;
+let markers = [];
+let storeData = [];
+let currentClickLngLat = null;
+let editingId = null;
+const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let categories = [];
+let iconLibrary = [];
+let collapsedCats = {};
+let visibleStores = new Set();
+let clickTimer = null;
+let brandColors = JSON.parse(localStorage.getItem('brandColors') || '{}');
+const BRAND_PALETTE = ['#1677ff','#ff4d4f','#52c41a','#fa8c16','#722ed1','#13c2c2','#eb2f96','#faad14','#2f54eb','#a0d911','#f5222d','#1890ff'];
+let brandColorIdx = 0;
+
+// ========== Supabase 云端数据操作 ==========
+// 字段映射：app驼峰 → 数据库蛇形
+const STORE_FIELD_MAP = {
+  brandColor:'brand_color', rentTax:'rent_tax', leaseStart:'lease_start',
+  leaseEnd:'lease_end', subType:'sub_type', iconStyle:'icon_style',
+  customIcon:'custom_icon', categoryId:'category_id', createTime:'create_time', updateTime:'update_time'
+};
+const CAT_FIELD_MAP = { parentId:'parent_id', sortOrder:'sort_order', createTime:'create_time' };
+
+function toSnake(obj, map) {
+  const r = {};
+  for (const k in obj) { const sk = map[k] || k; r[sk] = obj[k]; }
+  return r;
+}
+function toCamel(obj, map) {
+  const rev = {};
+  for (const k in map) rev[map[k]] = k;
+  const r = {};
+  for (const k in obj) { const ck = rev[k] || k; r[ck] = obj[k]; }
+  return r;
+}
+
+// 旧版 IndexedDB（用于首次迁移）
+const DB_NAME = 'StoreMapDB';
+const STORE_NAME = 'stores';
+const CAT_NAME = 'categories';
+const ICON_LIB_NAME = 'iconLibrary';
+function openOldDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 3);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+function readOldStore(name) {
+  return new Promise((resolve, reject) => {
+    openOldDB().then(db => {
+      if (!db.objectStoreNames.contains(name)) {
+        resolve([]); // 表不存在，返回空数组
+        return;
+      }
+      const tx = db.transaction(name, 'readonly');
+      const req = tx.objectStore(name).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = e => reject(e.target.error);
+    }).catch(e => {
+      console.warn('[迁移] 读取旧数据失败:', name, e);
+      resolve([]); // 出错也返回空数组，不阻断流程
+    });
+  });
+}
+
+// 从 IndexedDB 迁移数据到 Supabase（仅首次）
+async function migrateFromIndexedDB() {
+  try {
+    console.log('[迁移] 检查云端数据...');
+    let cloudCount = 0;
+    try {
+      const { count, error } = await sb.from('stores').select('*', { count: 'exact', head: true });
+      if (error) {
+        console.error('[迁移] 检查云端失败:', error.message);
+        showToast('云端连接失败: ' + error.message, 'error');
+        return;
+      }
+      cloudCount = count || 0;
+      console.log('[迁移] 云端门店数:', cloudCount);
+    } catch (e) {
+      console.error('[迁移] Supabase连接失败:', e);
+      showToast('无法连接Supabase，请检查网络', 'error');
+      return;
+    }
+    if (cloudCount > 0) { console.log('[迁移] 云端已有数据，跳过迁移'); return; }
+
+    console.log('[迁移] 读取本地IndexedDB...');
+    const [oldStores, oldCats, oldIcons] = await Promise.all([
+      readOldStore(STORE_NAME), readOldStore(CAT_NAME), readOldStore(ICON_LIB_NAME)
+    ]);
+    console.log('[迁移] 本地数据:', oldStores.length, '门店,', oldCats.length, '分类,', oldIcons.length, '图标');
+    if (oldStores.length === 0 && oldCats.length === 0 && oldIcons.length === 0) {
+      console.log('[迁移] 本地也无数据，跳过');
+      return;
+    }
+    // 迁移门店
+    for (const s of oldStores) {
+      const { error } = await sb.from('stores').upsert(toSnake(s, STORE_FIELD_MAP));
+      if (error) console.error('迁移门店失败:', s.name, error.message);
+    }
+    // 迁移分类
+    for (const c of oldCats) {
+      const { error } = await sb.from('categories').upsert(toSnake(c, CAT_FIELD_MAP));
+      if (error) console.error('迁移分类失败:', c.name, error.message);
+    }
+    // 迁移图标库
+    for (const i of oldIcons) {
+      const { error } = await sb.from('icon_library').insert({ id: i.id, name: i.name, data: i.data });
+      if (error) console.error('迁移图标失败:', i.id, error.message);
+    }
+    showToast(`已从本地迁移 ${oldStores.length} 家门店到云端`, 'success');
+  } catch (e) {
+    console.error('迁移失败:', e);
+    showToast('数据迁移失败: ' + e.message, 'error');
+  }
+}
+
+async function loadStores() {
+  console.log('[迁移] 开始检查...');
+  await migrateFromIndexedDB();
+  console.log('[迁移] 完成，开始从云端加载...');
+  const { data, error } = await sb.from('stores').select('*');
+  console.log('[云端] 加载结果:', data ? data.length + '条' : 'null', error || '');
+  if (error) { console.error('加载门店失败:', error); storeData = []; return storeData; }
+  storeData = (data || []).map(r => toCamel(r, STORE_FIELD_MAP));
+  console.log('[数据] 门店数量:', storeData.length);
+  return storeData;
+}
+
+async function loadCategories() {
+  const { data, error } = await sb.from('categories').select('*').order('sort_order');
+  if (error) { console.error('加载分类失败:', error); categories = []; return categories; }
+  categories = (data || []).map(r => toCamel(r, CAT_FIELD_MAP));
+  return categories;
+}
+
+async function saveCatToDB(data) {
+  const row = toSnake(data, CAT_FIELD_MAP);
+  const { error } = await sb.from('categories').upsert(row);
+  if (error) console.error('保存分类失败:', error);
+}
+
+async function deleteCatFromDB(id) {
+  const { error } = await sb.from('categories').delete().eq('id', id);
+  if (error) console.error('删除分类失败:', error);
+}
+
+async function loadIconLibrary() {
+  console.log('[图标库] 开始从云端加载...');
+  const { data, error } = await sb.from('icon_library').select('*');
+  if (error) { console.error('[图标库] 加载失败:', error); iconLibrary = []; return iconLibrary; }
+  iconLibrary = data || [];
+  console.log('[图标库] 加载成功, 共', iconLibrary.length, '个图标');
+  return iconLibrary;
+}
+
+async function saveIconToDB(data) {
+  console.log('[图标库] 保存图标:', data.id, data.name, 'data长度:', data.data?.length || 0);
+  // 只插入表里实际存在的字段
+  const insertData = { id: data.id, name: data.name, data: data.data };
+  // 先检查是否已存在，避免重复插入
+  const { data: existing, error: checkErr } = await sb.from('icon_library').select('id').eq('id', data.id).limit(1);
+  if (checkErr) { console.error('[图标库] 检查重复失败:', checkErr); }
+  if (existing && existing.length > 0) { console.log('[图标库] 图标已存在，跳过'); return; }
+  const { data: inserted, error } = await sb.from('icon_library').insert(insertData).select();
+  if (error) { console.error('[图标库] 插入失败:', error); }
+  else { console.log('[图标库] 插入成功:', inserted); }
+}
+
+async function deleteIconFromDB(id) {
+  const { error } = await sb.from('icon_library').delete().eq('id', id);
+  if (error) console.error('删除图标失败:', error);
+}
+
+async function saveToDB(data) {
+  const row = toSnake(data, STORE_FIELD_MAP);
+  const { error } = await sb.from('stores').upsert(row);
+  if (error) console.error('保存门店失败:', error);
+}
+
+async function deleteFromDB(id) {
+  const { error } = await sb.from('stores').delete().eq('id', id);
+  if (error) console.error('删除门店失败:', error);
+}
+
+// ========== 地图初始化 ==========
+const DEFAULT_AMAP_KEY = 'd8dcb5862efcc7c2e0277b46ada94c5b';
+const DEFAULT_AMAP_SECRET = '23ca7646e34aeb86566e14a59e4c41b8';
+function initMap() {
+  console.log('[地图] initMap 被调用');
+  // 优先用 localStorage 的 key，没有就用内置默认 key
+  let key = localStorage.getItem('amapKey');
+  if (!key) {
+    key = DEFAULT_AMAP_KEY;
+    localStorage.setItem('amapKey', key);
+  }
+  let secret = localStorage.getItem('amapSecret');
+  if (!secret) {
+    secret = DEFAULT_AMAP_SECRET;
+    localStorage.setItem('amapSecret', secret);
+  }
+  console.log('[地图] Key:', key, 'Secret:', secret ? '已设置' : '未设置');
+  const mapEl = document.getElementById('map');
+  console.log('[地图] 容器尺寸:', mapEl.offsetWidth, 'x', mapEl.offsetHeight);
+  window._AMapSecurityConfig = { securityJsCode: secret || '' };
+  const script = document.createElement('script');
+  script.src = `https://webapi.amap.com/maps?v=2.0&key=${key}`;
+  script.onload = () => {
+    console.log('[地图] AMap脚本加载成功');
+    try {
+      map = new AMap.Map('map', {
+        zoom: 12,
+        center: [116.397428, 39.90923],
+        mapStyle: ''
+      });
+      console.log('[地图] 地图创建成功');
+      map.on('click', onMapClick);
+      map.on('zoomend', updateMarkerSizes);
+      // 初始化地址搜索
+      initMapSearch();
+    } catch(e) {
+      console.error('[地图] 地图创建失败:', e);
+    }
+    loadStores().then(stores => {
+      return loadCategories();
+    }).then(() => {
+      return loadIconLibrary();
+    }).then(() => {
+      // 初始化品牌颜色索引
+      brandColorIdx = Object.keys(brandColors).length;
+      updateSidebar();
+    });
+    setTimeout(() => {
+      const tip = document.getElementById('mapTip');
+      tip.style.opacity = '1';
+      setTimeout(() => tip.style.opacity = '0', 4000);
+    }, 1000);
+  };
+  script.onerror = () => showToast('地图加载失败，请检查Key是否正确', 'error');
+  document.head.appendChild(script);
+  return true;
+}
+
+// ========== 地图点击 ==========
+function onMapClick(e) {
+  currentClickLngLat = e.lnglat;
+  editingId = null;
+  document.getElementById('modalTitle').textContent = '新增门店';
+  document.getElementById('btnDelete').style.display = 'none';
+  clearForm();
+  // 逆地理编码获取地址
+  if (map && map.plugin) {
+    map.plugin('AMap.Geocoder', () => {
+      const geocoder = new AMap.Geocoder();
+      geocoder.getAddress(e.lnglat, (status, result) => {
+        if (status === 'complete') {
+          document.getElementById('storeAddress').value = result.regeocode.formattedAddress || '';
+        }
+      });
+    });
+  }
+  openModal('storeModal');
+}
+
+// ========== 地图地址搜索 ==========
+let searchTimer = null;
+function initMapSearch() {
+  const input = document.getElementById('mapSearchInput');
+  const results = document.getElementById('mapSearchResults');
+  if (!input || !map) return;
+
+  map.plugin('AMap.PlaceSearch', () => {
+    const placeSearch = new AMap.PlaceSearch({
+      pageSize: 8,
+      pageIndex: 1,
+      city: '全国',
+      map: map,
+      panel: null
+    });
+
+    input.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      const keyword = input.value.trim();
+      if (keyword.length < 2) {
+        results.classList.remove('show');
+        results.innerHTML = '';
+        return;
+      }
+      searchTimer = setTimeout(() => {
+        placeSearch.search(keyword, (status, result) => {
+          if (status === 'complete' && result.poiList && result.poiList.pois.length > 0) {
+            let html = '';
+            result.poiList.pois.forEach(poi => {
+              html += `<div class="map-search-item" data-lng="${poi.location.getLng()}" data-lat="${poi.location.getLat()}" data-name="${poi.name}" data-addr="${poi.pname}${poi.cityname}${poi.adname}${poi.address}">
+                <div class="addr-name">${poi.name}</div>
+                <div class="addr-detail">${poi.pname}${poi.cityname}${poi.adname}${poi.address}</div>
+              </div>`;
+            });
+            results.innerHTML = html;
+            results.classList.add('show');
+          } else {
+            results.innerHTML = '<div style="padding:12px;text-align:center;color:#999;font-size:12px;">未找到相关地点</div>';
+            results.classList.add('show');
+          }
+        });
+      }, 300);
+    });
+
+    // 点击搜索结果
+    results.addEventListener('click', (e) => {
+      const item = e.target.closest('.map-search-item');
+      if (!item) return;
+      const lng = parseFloat(item.dataset.lng);
+      const lat = parseFloat(item.dataset.lat);
+      const name = item.dataset.name;
+      // 定位到搜索结果
+      map.setCenter([lng, lat]);
+      map.setZoom(16);
+      // 关闭搜索结果
+      results.classList.remove('show');
+      input.value = name;
+    });
+  });
+
+  // 点击其他地方关闭搜索结果
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.map-search-box')) {
+      results.classList.remove('show');
+    }
+  });
+}
+
+// ========== 标注点管理 ==========
+function createMarkerIcon(color, style, zoom, customIcon) {
+  const scale = Math.pow(1.08, zoom - 12);
+  const size = Math.round(18 * scale);
+  const h = Math.round(24 * scale);
+  // 自定义图标
+  if (style === 'custom' && customIcon) {
+    const cSize = Math.round(22 * scale);
+    return {
+      icon: new AMap.Icon({
+        size: new AMap.Size(cSize, cSize),
+        image: customIcon,
+        imageSize: new AMap.Size(cSize, cSize)
+      }),
+      offset: new AMap.Pixel(-cSize / 2, -cSize)
+    };
+  }
+  let svg = '';
+  switch(style) {
+    case 'star':
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 36">' +
+        '<path d="M14 2l3.5 8.5L26 12l-6.5 5.5L21 26l-7-4.5L7 26l1.5-8.5L2 12l8.5-1.5z" fill="'+color+'" stroke="#fff" stroke-width="1.5"/>' +
+        '<path d="M14 28v6" stroke="'+color+'" stroke-width="2" stroke-linecap="round"/>' +
+        '</svg>';
+      break;
+    case 'square':
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 36">' +
+        '<rect x="4" y="2" width="20" height="20" rx="3" fill="'+color+'" stroke="#fff" stroke-width="1.5"/>' +
+        '<path d="M14 22v10" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round"/>' +
+        '</svg>';
+      break;
+    case 'diamond':
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 36">' +
+        '<path d="M14 2l12 12-12 12L2 14z" fill="'+color+'" stroke="#fff" stroke-width="1.5"/>' +
+        '<path d="M14 26v8" stroke="'+color+'" stroke-width="2" stroke-linecap="round"/>' +
+        '</svg>';
+      break;
+    case 'flag':
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 36">' +
+        '<path d="M8 4h14l-3 5 3 5H8z" fill="'+color+'" stroke="#fff" stroke-width="1"/>' +
+        '<path d="M8 4v28" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round"/>' +
+        '</svg>';
+      break;
+    case 'circle':
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 36">' +
+        '<circle cx="14" cy="12" r="10" fill="'+color+'" stroke="#fff" stroke-width="1.5"/>' +
+        '<path d="M14 22v12" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round"/>' +
+        '</svg>';
+      break;
+    case 'triangle':
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 36">' +
+        '<path d="M14 2l12 20H2z" fill="'+color+'" stroke="#fff" stroke-width="1.5"/>' +
+        '<path d="M14 22v12" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round"/>' +
+        '</svg>';
+      break;
+    default: // pin
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 36">' +
+        '<path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z" fill="'+color+'"/>' +
+        '<circle cx="14" cy="13" r="5" fill="#fff"/>' +
+        '</svg>';
+  }
+  return {
+    icon: new AMap.Icon({
+      size: new AMap.Size(size, h),
+      image: 'data:image/svg+xml,' + encodeURIComponent(svg),
+      imageSize: new AMap.Size(size, h)
+    }),
+    offset: new AMap.Pixel(-size / 2, -h)
+  };
+}
+
+function addMarker(store) {
+  if (!map) return;
+  const zoom = map.getZoom();
+  const { icon, offset } = createMarkerIcon(store.color || '#1677ff', store.iconStyle || 'pin', zoom, store.customIcon);
+  const markerOpts = {
+    position: [store.lng, store.lat],
+    title: `${store.name}\n品牌：${store.brand||'-'}\n类型：${store.type||'-'}${store.subType&&store.type==='直营店'?' · '+store.subType:''}\n面积：${store.area||'-'}㎡\n不含税租金：${store.rent?'¥'+Number(store.rent).toLocaleString()+'/年':'-'}\n含税租金：${store.rentTax?'¥'+Number(store.rentTax).toLocaleString()+'/年':'-'}\n单价：${(()=>{const p=calcUnitPrice(store);return p?p+'元/㎡/月':'-';})()}\n地址：${store.address||'未填写'}\n租期：${store.leaseStart||'-'} 至 ${store.leaseEnd||'-'}\n备注：${store.remark||'-'}`,
+    icon: icon,
+    offset: offset
+  };
+  if (store.brand) {
+    const brandColor = store.brandColor || getBrandColor(store.brand);
+    markerOpts.label = {
+      content: `<div style="background:${brandColor};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.15);">${store.brand}</div>`,
+      direction: 'bottom',
+      offset: new AMap.Pixel(0, 6)
+    };
+  }
+  const marker = new AMap.Marker(markerOpts);
+  marker.on('click', () => showDetail(store));
+  map.add(marker);
+  markers.push({ id: store.id, marker, store });
+}
+
+function removeMarker(id) {
+  const idx = markers.findIndex(m => m.id === id);
+  if (idx >= 0) {
+    map.remove(markers[idx].marker);
+    markers.splice(idx, 1);
+  }
+}
+
+function refreshMarkers() {
+  markers.forEach(m => map.remove(m.marker));
+  markers = [];
+  storeData.filter(s => visibleStores.has(s.id)).forEach(s => addMarker(s));
+}
+
+function updateMarkerSizes() {
+  const zoom = map.getZoom();
+  markers.forEach(m => {
+    const { icon, offset } = createMarkerIcon(m.store.color || '#1677ff', m.store.iconStyle || 'pin', zoom, m.store.customIcon);
+    m.marker.setIcon(icon);
+    m.marker.setOffset(offset);
+  });
+}
+
+// ========== 门店 CRUD ==========
+async function saveStore() {
+  const name = document.getElementById('storeName').value.trim();
+  if (!name) { showToast('请输入门店名称', 'error'); return; }
+  if (!currentClickLngLat && !editingId) { showToast('请先在地图上选择位置', 'error'); return; }
+
+  const data = {
+    id: editingId || Date.now().toString(),
+    name,
+    brand: document.getElementById('storeBrand').value.trim(),
+    brandColor: brandColors[document.getElementById('storeBrand').value.trim()] || '',
+    address: document.getElementById('storeAddress').value.trim(),
+    area: document.getElementById('storeArea').value,
+    rent: document.getElementById('storeRent').value,
+    rentTax: document.getElementById('storeRentTax').value,
+    leaseStart: document.getElementById('storeLeaseStart').value,
+    leaseEnd: document.getElementById('storeLeaseEnd').value,
+    type: document.getElementById('storeType').value,
+    subType: document.getElementById('storeSubType').value,
+    color: document.getElementById('storeColor').value || '#1677ff',
+    iconStyle: document.getElementById('storeIconStyle').value || 'pin',
+    customIcon: document.getElementById('storeCustomIcon').value || '',
+    categoryId: document.getElementById('storeCategoryId').value || '',
+    remark: document.getElementById('storeRemark').value.trim(),
+    lng: editingId ? storeData.find(s=>s.id===editingId).lng : currentClickLngLat.getLng(),
+    lat: editingId ? storeData.find(s=>s.id===editingId).lat : currentClickLngLat.getLat(),
+    createTime: editingId ? storeData.find(s=>s.id===editingId).createTime : new Date().toISOString(),
+    updateTime: new Date().toISOString()
+  };
+
+  await saveToDB(data);
+  markDirty();
+  const existIdx = storeData.findIndex(s => s.id === data.id);
+  if (existIdx >= 0) { storeData[existIdx] = data; if (visibleStores.has(data.id)) { removeMarker(data.id); addMarker(data); } }
+  else storeData.push(data);
+  updateSidebar();
+  closeModal('storeModal');
+  showToast(editingId ? '门店信息已更新' : '门店添加成功', 'success');
+}
+
+async function deleteStore() {
+  if (!editingId) return;
+  if (!confirm('确定要删除这家门店吗？')) return;
+  await deleteFromDB(editingId);
+  removeMarker(editingId);
+  visibleStores.delete(editingId);
+  storeData = storeData.filter(s => s.id !== editingId);
+  markDirty();
+  updateSidebar();
+  closeModal('storeModal');
+  showToast('门店已删除', 'info');
+}
+
+// ========== 详情展示 ==========
+function showDetail(store) {
+  document.getElementById('detailTitle').textContent = store.name;
+  const leaseText = (store.leaseStart && store.leaseEnd) ? store.leaseStart + ' 至 ' + store.leaseEnd : '-';
+  const fields = [
+    ['地址', store.address || '-'],
+    ['面积', store.area ? store.area + ' ㎡' : '-'],
+    ['不含税年租金', store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : '-'],
+    ['含税年租金', store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : '-'],
+    ['单价', (()=>{const p=calcUnitPrice(store);return p?p+' 元/㎡/月':'-';})()],
+    ['租期', leaseText],
+    ['类型', store.type ? store.type + (store.subType && store.type === '直营店' ? ' · ' + store.subType : '') : '-'],
+    ['备注', store.remark || '-'],
+    ['创建时间', store.createTime ? new Date(store.createTime).toLocaleString('zh-CN') : '-']
+  ];
+  document.getElementById('detailBody').innerHTML = '<div class="detail-card">' +
+    fields.map(([l,v]) => `<div class="detail-row"><div class="detail-label">${l}</div><div class="detail-value">${v}</div></div>`).join('') +
+    '</div>';
+  document.getElementById('btnEdit').onclick = () => { closeModal('detailModal'); editStore(store.id); };
+  openModal('detailModal');
+}
+
+function editStore(id) {
+  const store = storeData.find(s => s.id === id);
+  if (!store) return;
+  editingId = id;
+  document.getElementById('modalTitle').textContent = '编辑门店';
+  document.getElementById('btnDelete').style.display = 'inline-flex';
+  document.getElementById('storeId').value = id;
+  document.getElementById('storeName').value = store.name;
+  document.getElementById('storeBrand').value = store.brand || '';
+  if (store.brand) {
+    const color = store.brandColor || getBrandColor(store.brand);
+    document.getElementById('brandColorPreview').style.background = color;
+    document.getElementById('brandColorPreview').style.display = '';
+    setBrandColor(store.brand, color);
+    // 高亮对应色块
+    setTimeout(() => {
+      document.querySelectorAll('#brandColorSwatches span').forEach(s => {
+        s.style.borderColor = rgbToHex(s.style.background) === color ? '#333' : 'transparent';
+      });
+    }, 0);
+  } else {
+    document.getElementById('brandColorPreview').style.display = 'none';
+  }
+  document.getElementById('storeAddress').value = store.address || '';
+  document.getElementById('storeArea').value = store.area || '';
+  document.getElementById('storeRent').value = store.rent || '';
+  document.getElementById('storeRentTax').value = store.rentTax || '';
+  document.getElementById('storeLeaseStart').value = store.leaseStart || '';
+  document.getElementById('storeLeaseEnd').value = store.leaseEnd || '';
+  document.getElementById('storeType').value = store.type || '';
+  document.getElementById('storeSubType').value = store.subType || '';
+  toggleSubType();
+  document.getElementById('storeColor').value = store.color || '#1677ff';
+  document.getElementById('storeIconStyle').value = store.iconStyle || 'pin';
+  document.getElementById('storeCustomIcon').value = store.customIcon || '';
+  if (store.customIcon) {
+    document.getElementById('customIconPreview').src = store.customIcon;
+    document.getElementById('customIconPreview').style.display = '';
+  } else {
+    document.getElementById('customIconPreview').style.display = 'none';
+  }
+  document.querySelectorAll('.icon-style-btn').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.querySelector(`.icon-style-btn[data-style="${store.iconStyle || 'pin'}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  document.getElementById('storeCategoryId').value = store.categoryId || '';
+  updateCatSelectText(store.categoryId);
+  document.getElementById('storeRemark').value = store.remark || '';
+  currentClickLngLat = null;
+  openModal('storeModal');
+}
+
+// ========== 分类管理 ==========
+function showAddCategory(parentId) {
+  document.getElementById('catModalTitle').textContent = '新建分类';
+  document.getElementById('btnDeleteCat').style.display = 'none';
+  document.getElementById('catName').value = '';
+  document.getElementById('catParent').value = parentId || '';
+  populateCatParentSelect();
+  openModal('categoryModal');
+}
+
+function showEditCategory(id) {
+  const cat = categories.find(c => c.id === id);
+  if (!cat) return;
+  document.getElementById('catModalTitle').textContent = '编辑分类';
+  document.getElementById('btnDeleteCat').style.display = 'inline-flex';
+  document.getElementById('catName').value = cat.name;
+  document.getElementById('catParent').value = cat.parentId || '';
+  populateCatParentSelect(id);
+  openModal('categoryModal');
+}
+
+function populateCatParentSelect(excludeId) {
+  const sel = document.getElementById('catParent');
+  sel.innerHTML = '<option value="">无（作为一级分类）</option>';
+  categories.filter(c => c.id !== excludeId && !c.parentId).forEach(c => {
+    sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+  });
+}
+
+async function saveCategory() {
+  const name = document.getElementById('catName').value.trim();
+  if (!name) { showToast('请输入分类名称', 'error'); return; }
+  const data = {
+    id: Date.now().toString(),
+    name,
+    parentId: document.getElementById('catParent').value || ''
+  };
+  await saveCatToDB(data);
+  categories.push(data);
+  updateSidebar();
+  closeModal('categoryModal');
+  showToast('分类已保存', 'success');
+}
+
+async function deleteCategory() {
+  const catName = document.getElementById('catName').value.trim();
+  const cat = categories.find(c => c.name === catName);
+  if (!cat) return;
+  if (!confirm(`确定删除分类「${cat.name}」吗？\n该分类下的门店将移至「未分类」`)) return;
+  await deleteCatFromDB(cat.id);
+  const subCats = categories.filter(c => c.parentId === cat.id);
+  for (const sc of subCats) { await deleteCatFromDB(sc.id); }
+  const allCatIds = [cat.id, ...subCats.map(c => c.id)];
+  for (const s of storeData) {
+    if (allCatIds.includes(s.categoryId)) {
+      s.categoryId = '';
+      await saveToDB(s);
+    }
+  }
+  categories = categories.filter(c => !allCatIds.includes(c.id));
+  updateSidebar();
+  closeModal('categoryModal');
+  showToast('分类已删除', 'info');
+}
+
+// ========== 分类选择器 ==========
+function toggleCatSelect() {
+  const dd = document.getElementById('catSelectDropdown');
+  dd.classList.toggle('show');
+  if (dd.classList.contains('show')) renderCatSelectOptions();
+}
+
+function renderCatSelectOptions() {
+  const dd = document.getElementById('catSelectDropdown');
+  const currentVal = document.getElementById('storeCategoryId').value;
+  let html = `<div class="cat-select-option ${!currentVal?'selected':''}" onclick="selectCategory('','未分类')">未分类</div>`;
+  categories.filter(c => !c.parentId).forEach(c => {
+    html += `<div class="cat-select-option ${currentVal===c.id?'selected':''}" onclick="selectCategory('${c.id}','${c.name}')">${c.name}</div>`;
+    categories.filter(sc => sc.parentId === c.id).forEach(sc => {
+      html += `<div class="cat-select-option sub ${currentVal===sc.id?'selected':''}" onclick="selectCategory('${sc.id}','${c.name} / ${sc.name}')">${sc.name}</div>`;
+    });
+  });
+  dd.innerHTML = html;
+}
+
+function selectCategory(id, text) {
+  document.getElementById('storeCategoryId').value = id;
+  updateCatSelectText(id);
+  document.getElementById('catSelectDropdown').classList.remove('show');
+}
+
+function updateCatSelectText(catId) {
+  const el = document.getElementById('catSelectText');
+  if (!catId) { el.textContent = '未分类'; return; }
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) { el.textContent = '未分类'; return; }
+  if (cat.parentId) {
+    const parent = categories.find(c => c.id === cat.parentId);
+    el.textContent = parent ? `${parent.name} / ${cat.name}` : cat.name;
+  } else {
+    el.textContent = cat.name;
+  }
+}
+
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('catSelectWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('catSelectDropdown').classList.remove('show');
+  }
+  const ctx = document.getElementById('contextMenu');
+  if (ctx && !ctx.contains(e.target)) ctx.classList.remove('show');
+});
+
+// ========== 侧边栏 ==========
+function calcUnitPrice(store) {
+  if (!store.area || Number(store.area) <= 0) return null;
+  const rent = store.rent ? Number(store.rent) : (store.rentTax ? Number(store.rentTax) : 0);
+  if (rent <= 0) return null;
+  return (rent / Number(store.area) / 12).toFixed(2);
+}
+
+function getBrandColor(brand) {
+  if (!brand) return '#999';
+  if (brandColors[brand]) return brandColors[brand];
+  // Auto assign next color from palette
+  const color = BRAND_PALETTE[brandColorIdx % BRAND_PALETTE.length];
+  brandColorIdx++;
+  brandColors[brand] = color;
+  localStorage.setItem('brandColors', JSON.stringify(brandColors));
+  return color;
+}
+
+function setBrandColor(brand, color) {
+  brandColors[brand] = color;
+  localStorage.setItem('brandColors', JSON.stringify(brandColors));
+}
+
+function updateBrandColorPreview() {
+  const brand = document.getElementById('storeBrand').value.trim();
+  const preview = document.getElementById('brandColorPreview');
+  if (brand) {
+    const color = getBrandColor(brand);
+    preview.style.background = color;
+    preview.style.display = '';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function applyBrandColor() {
+  const brand = document.getElementById('storeBrand').value.trim();
+  const color = document.getElementById('brandColorPicker').value;
+  if (brand) applyBrandColorTo(brand, color);
+}
+
+function pickBrandColor(color) {
+  const brand = document.getElementById('storeBrand').value.trim();
+  if (!brand) { showToast('请先输入品牌名称', 'error'); return; }
+  applyBrandColorTo(brand, color);
+}
+
+function applyBrandColorTo(brand, color) {
+  setBrandColor(brand, color);
+  document.getElementById('brandColorPreview').style.background = color;
+  // 高亮当前选中的色块
+  document.querySelectorAll('#brandColorSwatches span').forEach(s => {
+    s.style.borderColor = s.style.background === color || rgbToHex(s.style.background) === color ? '#333' : 'transparent';
+  });
+  // 同步更新所有该品牌的门店
+  storeData.forEach(s => {
+    if (s.brand === brand) {
+      s.brandColor = color;
+      saveToDB(s);
+    }
+  });
+  refreshMarkers();
+}
+
+function rgbToHex(rgb) {
+  if (rgb.startsWith('#')) return rgb;
+  const match = rgb.match(/\d+/g);
+  if (!match) return rgb;
+  return '#' + match.slice(0, 3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+}
+function naturalSort(a, b) {
+  const ax = [], bx = [];
+  a.replace(/(\d+)|(\D+)/g, (_, $1, $2) => { ax.push([$1 || Infinity, $2 || '']); });
+  b.replace(/(\d+)|(\D+)/g, (_, $1, $2) => { bx.push([$1 || Infinity, $2 || '']); });
+  while (ax.length && bx.length) {
+    const an = ax.shift(), bn = bx.shift();
+    const nn = (an[0] - bn[0]) || an[1].localeCompare(bn[1], 'zh');
+    if (nn) return nn;
+  }
+  return ax.length - bx.length;
+}
+function updateSidebar() {
+  const list = document.getElementById('storeList');
+  const rootCats = categories.filter(c => !c.parentId);
+  const uncatStores = storeData.filter(s => !s.categoryId || !categories.find(c => c.id === s.categoryId)).sort((a, b) => naturalSort(a.name, b.name));
+
+  if (storeData.length === 0 && categories.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="icon"></div><p>暂无门店数据<br>点击地图添加门店</p></div>';
+  } else {
+    let html = '';
+    rootCats.forEach(cat => {
+      const subCats = categories.filter(c => c.parentId === cat.id);
+      const catStores = storeData.filter(s => s.categoryId === cat.id).sort((a, b) => naturalSort(a.name, b.name));
+      const subStoreCount = subCats.reduce((sum, sc) => sum + storeData.filter(s => s.categoryId === sc.id).length, 0);
+      const totalCount = catStores.length + subStoreCount;
+      const isOpen = !collapsedCats[cat.id];
+      html += `<div class="cat-group">
+        <div class="cat-header ${isCategoryFullyVisible(cat.id)?'cat-visible':''}" onclick="onCatClick('${cat.id}');event.stopPropagation();" ondblclick="onCatDblClick('${cat.id}')">
+          <span class="cat-arrow ${isOpen?'open':''}">▶</span>
+          <span class="cat-name">${cat.name}</span>
+          <span class="cat-count">${totalCount}</span>
+          <div class="cat-actions">
+            <button class="cat-action-btn" onclick="event.stopPropagation();showAddCategory('${cat.id}')" title="添加子分类">＋</button>
+            <button class="cat-action-btn" onclick="event.stopPropagation();showEditCategory('${cat.id}')" title="编辑">✏️</button>
+          </div>
+        </div>
+        <div class="cat-children ${isOpen?'':'collapsed'}" style="max-height:${isOpen?'50000px':'0'}">`;
+      subCats.forEach(sc => {
+        const scStores = storeData.filter(s => s.categoryId === sc.id).sort((a, b) => naturalSort(a.name, b.name));
+        const scOpen = !collapsedCats[sc.id];
+        html += `<div class="cat-sub">
+          <div class="cat-header ${isCategoryFullyVisible(sc.id)?'cat-visible':''}" onclick="onCatClick('${sc.id}');event.stopPropagation();" ondblclick="onCatDblClick('${sc.id}')">
+            <span class="cat-arrow ${scOpen?'open':''}">▶</span>
+            <span class="cat-name">${sc.name}</span>
+            <span class="cat-count">${scStores.length}</span>
+            <div class="cat-actions">
+              <button class="cat-action-btn" onclick="event.stopPropagation();showEditCategory('${sc.id}')" title="编辑">✏️</button>
+            </div>
+          </div>
+          <div class="cat-children ${scOpen?'':'collapsed'}" style="max-height:${scOpen?'50000px':'0'}">`;
+        scStores.forEach(s => { html += renderStoreItem(s); });
+        html += `</div></div>`;
+      });
+      catStores.forEach(s => { html += renderStoreItem(s); });
+      html += `</div></div>`;
+    });
+    if (uncatStores.length > 0 || rootCats.length > 0) {
+      const ucOpen = !collapsedCats['_uncat'];
+      html += `<div class="uncat-header ${uncatStores.length>0&&uncatStores.every(s=>visibleStores.has(s.id))?'cat-visible':''}" onclick="onCatClick('_uncat');event.stopPropagation();" ondblclick="onCatDblClick('_uncat')">
+        <span class="cat-arrow ${ucOpen?'open':''}">▶</span>
+        <span class="uncat-name">未分类</span>
+        <span class="cat-count">${uncatStores.length}</span>
+      </div>
+      <div class="cat-children ${ucOpen?'':'collapsed'}" style="max-height:${ucOpen?'50000px':'0'}">`;
+      uncatStores.forEach(s => { html += renderStoreItem(s); });
+      html += `</div>`;
+    }
+    list.innerHTML = html;
+    bindDragEvents();
+  }
+  document.getElementById('storeCount').textContent = `共 ${storeData.length} 家门店`;
+  // 按品牌统计
+  const brandCount = {};
+  storeData.forEach(s => {
+    const brand = s.brand || s.name;
+    brandCount[brand] = (brandCount[brand] || 0) + 1;
+  });
+  const brandEntries = Object.entries(brandCount).sort((a, b) => b[1] - a[1]);
+  const brandHtml = brandEntries.map(([name, count]) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:#f0f5ff;color:#1677ff;border-radius:20px;font-size:13px;font-weight:500;white-space:nowrap;"><span>${name}</span><span style="background:#1677ff;color:#fff;padding:1px 8px;border-radius:10px;font-size:12px;">${count}</span></span>`).join('');
+  document.getElementById('statBrands').innerHTML = brandHtml || '<span style="color:#bbb;font-size:13px;">暂无数据</span>';
+}
+
+function renderStoreItem(s) {
+  const isVisible = visibleStores.has(s.id);
+  return `<div class="cat-store-item ${isVisible?'visible':''}" draggable="true" data-id="${s.id}" onclick="toggleStoreVisible('${s.id}')" oncontextmenu="showContextMenu(event,'${s.id}')">
+    <div class="cat-store-name">${isVisible?'📍 ':''}${s.name}</div>
+    <div class="cat-store-info">
+      <span style="color:#1a1a1a">${s.area ? s.area+'㎡' : ''}</span>
+      <span style="color:#e53e3e;white-space:nowrap">${s.rent ? '不含税'+Number(s.rent).toLocaleString()+'元' : ''}${s.rent && s.rentTax ? '，' : ''}${s.rentTax ? '含税'+Number(s.rentTax).toLocaleString()+'元' : ''}</span>
+      ${(()=>{const p=calcUnitPrice(s);return p?'<span style="color:#e53e3e;white-space:nowrap">'+p+'元/㎡/月</span>':'';})()}
+    </div>
+    ${s.type ? `<span class="store-item-tag">${s.type}${s.subType && s.type==='直营店' ? ' · '+s.subType : ''}</span>` : ''}
+  </div>`;
+}
+
+function toggleCat(id) {
+  collapsedCats[id] = !collapsedCats[id];
+  updateSidebar();
+}
+
+// ========== 标注显示控制 ==========
+function toggleStoreVisible(storeId) {
+  if (visibleStores.has(storeId)) {
+    visibleStores.delete(storeId);
+    removeMarker(storeId);
+  } else {
+    visibleStores.add(storeId);
+    const store = storeData.find(s => s.id === storeId);
+    if (store) {
+      addMarker(store);
+      map.setZoomAndCenter(16, [store.lng, store.lat]);
+    }
+  }
+  updateSidebar();
+}
+
+function onCatClick(catId) {
+  if (clickTimer) clearTimeout(clickTimer);
+  clickTimer = setTimeout(() => { toggleCategoryVisible(catId); clickTimer = null; }, 250);
+}
+function onCatDblClick(catId) {
+  if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+  toggleCat(catId);
+}
+function toggleCategoryVisible(catId) {
+  const subCatIds = categories.filter(c => c.parentId === catId).map(c => c.id);
+  const allIds = [catId, ...subCatIds];
+  const catStores = storeData.filter(s => allIds.includes(s.categoryId));
+  if (catStores.length === 0) return;
+  // Check if all are visible
+  const allVisible = catStores.every(s => visibleStores.has(s.id));
+  if (allVisible) {
+    // Hide all
+    catStores.forEach(s => { visibleStores.delete(s.id); removeMarker(s.id); });
+  } else {
+    // Show all
+    catStores.forEach(s => {
+      if (!visibleStores.has(s.id)) {
+        visibleStores.add(s.id);
+        addMarker(s);
+      }
+    });
+    // Center map on first store
+    if (catStores.length > 0) {
+      map.setZoomAndCenter(14, [catStores[0].lng, catStores[0].lat]);
+    }
+  }
+  updateSidebar();
+}
+
+function isCategoryFullyVisible(catId) {
+  const subCatIds = categories.filter(c => c.parentId === catId).map(c => c.id);
+  const allIds = [catId, ...subCatIds];
+  const catStores = storeData.filter(s => allIds.includes(s.categoryId));
+  return catStores.length > 0 && catStores.every(s => visibleStores.has(s.id));
+}
+
+// ========== 拖拽 ==========
+let dragStoreId = null;
+
+function bindDragEvents() {
+  document.querySelectorAll('.cat-store-item').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      dragStoreId = el.dataset.id;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      document.querySelectorAll('.cat-store-item').forEach(i => i.classList.remove('drag-over'));
+      dragStoreId = null;
+    });
+  });
+  document.querySelectorAll('.cat-header, .uncat-header').forEach(el => {
+    el.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = '#e6f4ff'; });
+    el.addEventListener('dragleave', () => { el.style.background = ''; });
+    el.addEventListener('drop', async e => {
+      e.preventDefault();
+      el.style.background = '';
+      if (!dragStoreId) return;
+      const header = e.currentTarget;
+      let targetCatId = '';
+      if (header.classList.contains('uncat-header')) {
+        targetCatId = '';
+      } else {
+        const onclick = header.getAttribute('onclick');
+        const match = onclick.match(/onCatClick\('([^']+)'\)/);
+        if (match) targetCatId = match[1];
+      }
+      await moveStoreToCategory(dragStoreId, targetCatId);
+    });
+  });
+}
+
+async function moveStoreToCategory(storeId, categoryId) {
+  const store = storeData.find(s => s.id === storeId);
+  if (!store) return;
+  store.categoryId = categoryId;
+  await saveToDB(store);
+  markDirty();
+  updateSidebar();
+  const catName = categoryId ? categories.find(c => c.id === categoryId)?.name || '' : '未分类';
+  showToast(`已移至「${catName}」`, 'success');
+}
+
+// ========== 右键菜单 ==========
+function showContextMenu(e, storeId) {
+  e.preventDefault();
+  const store = storeData.find(s => s.id === storeId);
+  if (!store) return;
+  const ctx = document.getElementById('contextMenu');
+  let html = `<div class="ctx-item" onclick="toggleStoreVisible('${storeId}');hideContextMenu()">${visibleStores.has(storeId)?'️ 隐藏标注':'📍 显示标注'}</div>`;
+  html += `<div class="ctx-item" onclick="locateStore('${storeId}');hideContextMenu()"> 定位到地图</div>`;
+  html += `<div class="ctx-item" onclick="editStore('${storeId}');hideContextMenu()">✏️ 编辑信息</div>`;
+  html += `<div class="ctx-divider"></div>`;
+  html += `<div class="ctx-sub-label">移动到分类</div>`;
+  html += `<div class="ctx-item" onclick="moveStoreToCategory('${storeId}','');hideContextMenu()"> 未分类</div>`;
+  categories.filter(c => !c.parentId).forEach(c => {
+    html += `<div class="ctx-item" onclick="moveStoreToCategory('${storeId}','${c.id}');hideContextMenu()">📁 ${c.name}</div>`;
+    categories.filter(sc => sc.parentId === c.id).forEach(sc => {
+      html += `<div class="ctx-item" style="padding-left:28px;font-size:12px" onclick="moveStoreToCategory('${storeId}','${sc.id}');hideContextMenu()"> ${sc.name}</div>`;
+    });
+  });
+  html += `<div class="ctx-divider"></div>`;
+  html += `<div class="ctx-item" onclick="batchChangeIcon('${storeId}');hideContextMenu()">🖼️ 批量修改图标</div>`;
+  html += `<div class="ctx-divider"></div>`;
+  html += `<div class="ctx-item danger" onclick="deleteStoreById('${storeId}');hideContextMenu()">🗑️ 删除门店</div>`;
+  ctx.innerHTML = html;
+  ctx.style.left = e.clientX + 'px';
+  ctx.style.top = e.clientY + 'px';
+  ctx.classList.add('show');
+  // 防止菜单超出屏幕
+  const rect = ctx.getBoundingClientRect();
+  if (rect.right > window.innerWidth) ctx.style.left = (window.innerWidth - rect.width - 8) + 'px';
+  if (rect.bottom > window.innerHeight) ctx.style.top = (window.innerHeight - rect.height - 8) + 'px';
+  if (rect.left < 0) ctx.style.left = '8px';
+  if (rect.top < 0) ctx.style.top = '8px';
+}
+
+function hideContextMenu() {
+  document.getElementById('contextMenu').classList.remove('show');
+}
+
+async function deleteStoreById(id) {
+  if (!confirm('确定要删除这家门店吗？')) return;
+  await deleteFromDB(id);
+  removeMarker(id);
+  visibleStores.delete(id);
+  storeData = storeData.filter(s => s.id !== id);
+  markDirty();
+  if (editingId === id) { editingId = null; closeModal('storeModal'); }
+  updateSidebar();
+  showToast('门店已删除', 'info');
+}
+
+async function batchChangeIcon(storeId) {
+  const store = storeData.find(s => s.id === storeId);
+  if (!store) return;
+  const catId = store.categoryId || '';
+  const sameCatStores = storeData.filter(s => s.categoryId === catId);
+  const count = sameCatStores.length;
+  if (!confirm(`确定将「${store.name}」所在分类的 ${count} 家门店图标统一修改吗？`)) return;
+  const iconStyle = store.iconStyle;
+  const customIcon = store.customIcon;
+  const color = store.color;
+  for (const s of sameCatStores) {
+    s.iconStyle = iconStyle;
+    s.customIcon = customIcon;
+    s.color = color;
+    await saveToDB(s);
+    const m = markers.find(m => m.store.id === s.id);
+    if (m) {
+      m.store.iconStyle = iconStyle;
+      m.store.customIcon = customIcon;
+      m.store.color = color;
+      const zoom = map.getZoom();
+      const { icon, offset } = createMarkerIcon(color, iconStyle, zoom, customIcon);
+      m.marker.setIcon(icon);
+      m.marker.setOffset(offset);
+    }
+  }
+  updateSidebar();
+  showToast(`已批量更新 ${count} 家门店图标`, 'success');
+}
+
+function locateStore(id) {
+  const store = storeData.find(s => s.id === id);
+  if (!store || !map) return;
+  map.setZoomAndCenter(16, [store.lng, store.lat]);
+  showDetail(store);
+  // 高亮侧边栏
+  document.querySelectorAll('.cat-store-item').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.cat-store-item[data-id="${id}"]`);
+  if (el) el.classList.add('active');
+}
+
+function filterStores(keyword) {
+  const items = document.querySelectorAll('.cat-store-item');
+  const kw = keyword.toLowerCase();
+  items.forEach(el => {
+    const name = el.querySelector('.cat-store-name').textContent.toLowerCase();
+    el.style.display = name.includes(kw) ? '' : 'none';
+  });
+  // Expand all categories when searching
+  if (keyword) {
+    Object.keys(collapsedCats).forEach(k => collapsedCats[k] = false);
+    updateSidebar();
+    setTimeout(() => {
+      document.querySelectorAll('.cat-store-item').forEach(el => {
+        const name = el.querySelector('.cat-store-name').textContent.toLowerCase();
+        el.style.display = name.includes(kw) ? '' : 'none';
+      });
+    }, 50);
+  }
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile) {
+    sidebar.classList.toggle('mobile-show');
+    let overlay = document.querySelector('.sidebar-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'sidebar-overlay';
+      overlay.onclick = () => { sidebar.classList.remove('mobile-show'); overlay.classList.remove('show'); };
+      document.body.appendChild(overlay);
+    }
+    overlay.classList.toggle('show', sidebar.classList.contains('mobile-show'));
+  } else {
+    sidebar.classList.toggle('collapsed');
+  }
+}
+
+function expandAllCats() {
+  collapsedCats = {};
+  updateSidebar();
+}
+
+function collapseAllCats() {
+  categories.forEach(c => { collapsedCats[c.id] = true; });
+  collapsedCats['_uncat'] = true;
+  updateSidebar();
+}
+
+// ========== 导出/导入 ==========
+function exportData() {
+  if (storeData.length === 0 && categories.length === 0) { showToast('暂无数据可导出', 'error'); return; }
+  const data = { stores: storeData, categories: categories, iconLibrary: iconLibrary, exportTime: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `门店备份_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`已导出 ${storeData.length} 家门店数据`, 'success');
+}
+
+function exportExcel() {
+  if (storeData.length === 0) { showToast('暂无门店数据可导出', 'error'); return; }
+  const rows = storeData.map(s => {
+    const cat = categories.find(c => c.id === s.categoryId);
+    const parentCat = cat && cat.parentId ? categories.find(c => c.id === cat.parentId) : null;
+    const catName = parentCat ? parentCat.name + ' > ' + cat.name : (cat ? cat.name : '未分类');
+    const unitPrice = calcUnitPrice(s);
+    return {
+      '门店名称': s.name || '',
+      '品牌/连锁': s.brand || '',
+      '地址': s.address || '',
+      '面积(㎡)': s.area || '',
+      '不含税年租金(元)': s.rent ? Number(s.rent) : '',
+      '含税年租金(元)': s.rentTax ? Number(s.rentTax) : '',
+      '单价(元/㎡/月)': unitPrice ? Number(unitPrice) : '',
+      '门店类型': s.type || '',
+      '二级类型': (s.subType && s.type === '直营店') ? s.subType : '',
+      '所属分类': catName,
+      '租期开始': s.leaseStart || '',
+      '租期结束': s.leaseEnd || '',
+      '备注': s.remark || '',
+      '创建时间': s.createTime ? new Date(s.createTime).toLocaleString('zh-CN') : ''
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  // 设置列宽
+  ws['!cols'] = [
+    {wch:18},{wch:15},{wch:30},{wch:10},{wch:16},{wch:16},{wch:14},
+    {wch:12},{wch:12},{wch:20},{wch:12},{wch:12},{wch:20},{wch:22}
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '门店信息');
+  XLSX.writeFile(wb, `门店信息_${new Date().toISOString().slice(0,10)}.xlsx`);
+  showToast(`已导出 ${rows.length} 家门店到Excel`, 'success');
+}
+
+async function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    // Support both old format (array) and new format (object with stores+categories)
+    let stores, cats, icons;
+    if (Array.isArray(parsed)) {
+      stores = parsed; cats = []; icons = [];
+    } else {
+      stores = parsed.stores || [];
+      cats = parsed.categories || [];
+      icons = parsed.iconLibrary || [];
+    }
+    let storeCount = 0, catCount = 0, iconCount = 0;
+    for (const item of icons) {
+      if (item.id && item.data) { await saveIconToDB(item); iconCount++; }
+    }
+    for (const item of cats) {
+      if (item.id && item.name) { await saveCatToDB(item); catCount++; }
+    }
+    for (const item of stores) {
+      if (item.id && item.name && item.lng && item.lat) { await saveToDB(item); storeCount++; }
+    }
+    storeData = []; categories = []; iconLibrary = [];
+    await loadStores();
+    await loadCategories();
+    await loadIconLibrary();
+    // 恢复品牌颜色
+    storeData.forEach(s => {
+      if (s.brand && s.brandColor) setBrandColor(s.brand, s.brandColor);
+    });
+    brandColorIdx = Object.keys(brandColors).length;
+    refreshMarkers();
+    updateSidebar();
+    showToast(`成功导入 ${storeCount} 家门店、${catCount} 个分类、${iconCount} 个图标`, 'success');
+  } catch (e) {
+    showToast('导入失败：文件格式不正确', 'error');
+  }
+  event.target.value = '';
+}
+
+// ========== 设置 ==========
+function showSettings() {
+  document.getElementById('amapKey').value = localStorage.getItem('amapKey') || DEFAULT_AMAP_KEY;
+  document.getElementById('amapSecret').value = localStorage.getItem('amapSecret') || DEFAULT_AMAP_SECRET;
+  openModal('settingsModal');
+}
+
+function saveSettings() {
+  const key = document.getElementById('amapKey').value.trim();
+  const secret = document.getElementById('amapSecret').value.trim();
+  if (!key) { showToast('请输入高德地图 Key', 'error'); return; }
+  localStorage.setItem('amapKey', key);
+  localStorage.setItem('amapSecret', secret);
+  closeModal('settingsModal');
+  showToast('设置已保存，正在刷新...', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+
+// ========== 弹窗/工具 ==========
+function openModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+function clearForm() {
+  ['storeName','storeBrand','storeAddress','storeArea','storeRent','storeRentTax','storeLeaseStart','storeLeaseEnd','storeRemark'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('storeCategoryId').value = '';
+  updateCatSelectText('');
+  document.getElementById('storeRemark').value = '';
+  document.getElementById('storeType').value = '';
+  document.getElementById('storeSubType').value = '';
+  document.getElementById('storeSubType').parentElement.parentElement.style.display = 'none';
+  document.getElementById('storeColor').value = '#1677ff';
+  document.getElementById('storeIconStyle').value = 'pin';
+  document.getElementById('storeCustomIcon').value = '';
+  document.getElementById('customIconPreview').style.display = 'none';
+  document.getElementById('brandColorPreview').style.display = 'none';
+  document.querySelectorAll('.icon-style-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.icon-style-btn[data-style="pin"]').classList.add('active');
+}
+
+function selectIconStyle(el) {
+  document.querySelectorAll('.icon-style-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('storeIconStyle').value = el.dataset.style;
+}
+
+function handleCustomIcon(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result;
+    document.getElementById('customIconPreview').src = base64;
+    document.getElementById('customIconPreview').style.display = '';
+    document.getElementById('storeCustomIcon').value = base64;
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+// ========== 图标库选择器 ==========
+let iconPickerTarget = null;
+
+function showIconPicker(btn) {
+  iconPickerTarget = btn;
+  const picker = document.getElementById('iconPicker');
+  const rect = btn.getBoundingClientRect();
+  picker.style.left = rect.left + 'px';
+  picker.style.top = (rect.bottom + 6) + 'px';
+  renderIconPickerGrid();
+  picker.classList.add('show');
+}
+
+function hideIconPicker() {
+  document.getElementById('iconPicker').classList.remove('show');
+}
+
+function renderIconPickerGrid() {
+  const grid = document.getElementById('iconPickerGrid');
+  const currentVal = document.getElementById('storeCustomIcon').value;
+  let html = '';
+  iconLibrary.forEach(icon => {
+    const isActive = currentVal === icon.data;
+    html += `<div class="icon-picker-item ${isActive?'active':''}" onclick="selectIconFromLib('${icon.id}')">
+      <img src="${icon.data}" title="${icon.name}">
+      <div class="del-icon" onclick="event.stopPropagation();deleteIconFromLib('${icon.id}')">✕</div>
+    </div>`;
+  });
+  if (iconLibrary.length === 0) {
+    html = '<div style="grid-column:1/-1;text-align:center;color:#999;font-size:12px;padding:12px 0;">暂无图标，请上传</div>';
+  }
+  grid.innerHTML = html;
+}
+
+function selectIconFromLib(iconId) {
+  const icon = iconLibrary.find(i => i.id === iconId);
+  if (!icon) return;
+  document.getElementById('storeCustomIcon').value = icon.data;
+  document.getElementById('customIconPreview').src = icon.data;
+  document.getElementById('customIconPreview').style.display = '';
+  renderIconPickerGrid();
+  hideIconPicker();
+}
+
+async function handleIconPickerUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const base64 = e.target.result;
+    const iconData = {
+      id: 'icon_' + Date.now(),
+      name: file.name.replace(/\.[^.]+$/, ''),
+      data: base64
+    };
+    console.log('[图标上传] 开始上传:', file.name, '大小:', file.size);
+    await saveIconToDB(iconData);
+    console.log('[图标上传] saveIconToDB 完成, 当前iconLibrary数量:', iconLibrary.length);
+    iconLibrary.push(iconData);
+    document.getElementById('storeCustomIcon').value = base64;
+    document.getElementById('customIconPreview').src = base64;
+    document.getElementById('customIconPreview').style.display = '';
+    renderIconPickerGrid();
+    showToast('图标已保存，下次可直接选择', 'success');
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+async function deleteIconFromLib(iconId) {
+  if (!confirm('确定删除此图标？')) return;
+  await deleteIconFromDB(iconId);
+  iconLibrary = iconLibrary.filter(i => i.id !== iconId);
+  renderIconPickerGrid();
+}
+
+// 点击外部关闭图标选择器
+document.addEventListener('click', function(e) {
+  const picker = document.getElementById('iconPicker');
+  if (picker && picker.classList.contains('show') && !picker.contains(e.target) && !e.target.closest('[data-style="custom"]')) {
+    hideIconPicker();
+  }
+});
+
+function toggleSubType() {
+  const row = document.getElementById('subTypeRow');
+  row.style.display = document.getElementById('storeType').value === '直营店' ? '' : 'none';
+  if (row.style.display === 'none') document.getElementById('storeSubType').value = '';
+}
+
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = (type==='success'?'✅ ':type==='error'?'❌ ':'ℹ️ ') + msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// 点击遮罩关闭弹窗
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('show');
+  });
+});
+
+// ========== 关闭备份 ==========
+let isBackingUp = false;
+let hasUnsavedData = false;
+
+function markDirty() {
+  hasUnsavedData = storeData.length > 0;
+}
+
+window.addEventListener('beforeunload', function(e) {
+  if (hasUnsavedData && !isBackingUp) {
+    e.preventDefault();
+    e.returnValue = '您有门店数据尚未备份，确定要离开吗？';
+    return e.returnValue;
+  }
+});
+
+function showBackupModal() {
+  if (storeData.length === 0) { window.close(); return; }
+  openModal('backupModal');
+}
+
+function doBackupAndClose() {
+  isBackingUp = true;
+  exportData();
+  setTimeout(() => {
+    closeModal('backupModal');
+    window.close();
+  }, 1000);
+}
+
+// ========== 启动 ==========
+window.onload = () => {
+  console.log('[启动] window.onload 触发');
+  const loggedIn = checkLoginState();
+  console.log('[启动] 登录状态:', loggedIn);
+  if (!loggedIn) {
+    console.log('[启动] 未登录，等待登录');
+    return;
+  }
+  console.log('[启动] 已登录，开始初始化地图');
+  initMap();
+};
+
+// ========== PWA Service Worker ==========
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(() => {
+    console.log('[PWA] Service Worker 注册成功');
+  }).catch(err => {
+    console.log('[PWA] Service Worker 注册失败:', err);
+  });
+}
+</script>
+</body>
+</html>
