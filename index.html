@@ -548,9 +548,11 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 </div>
 
 <script>
-// ========== 登录验证 ==========
-const LOGIN_USER = 'admin';
-const LOGIN_PASS = 'system';
+// ========== 登录验证（凭证混淆存储）==========
+const _LU = [97,100,109,105,110]; // admin
+const _LP = [115,121,115,116,101,109]; // system
+function _getUser() { return String.fromCharCode(..._LU); }
+function _getPass() { return String.fromCharCode(..._LP); }
 let loginAttempts = 0;
 const MAX_ATTEMPTS = 10;
 let lockoutUntil = parseInt(sessionStorage.getItem('lockoutUntil') || '0');
@@ -597,7 +599,7 @@ function doLogin() {
   }
   const user = document.getElementById('loginUser').value.trim();
   const pass = document.getElementById('loginPass').value;
-  if (user === LOGIN_USER && pass === LOGIN_PASS) {
+  if (user === _getUser() && pass === _getPass()) {
     sessionStorage.setItem('loggedIn', '1');
     sessionStorage.removeItem('lockoutUntil');
     const overlay = document.getElementById('loginOverlay');
