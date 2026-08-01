@@ -630,53 +630,26 @@ const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ========== 安全密钥（混淆存储）==========
+// ========== 安全密钥（通过自定义Header传递）==========
 const _SK = [115,109,50,48,50,54,95,115,101,99,117,114,101,95,107,101,121,95,120,75,57,109,80,50,118,76,55,110,81,52];
-let _appKeySet = false;
 function _getSecureKey() { return String.fromCharCode(..._SK); }
-async function _ensureSecureKey() {
-  if (_appKeySet) return true;
-  try {
-    await sb.rpc('set_app_key', { key: _getSecureKey() });
-    _appKeySet = true;
-    return true;
-  } catch(e) {
-    console.error('[安全] 设置密钥失败:', e);
-    return false;
-  }
-}
-// 包装 sb.from，确保每次查询前都设置密钥
+
+// 包装 sb.from，每次请求带上自定义Header
 const _origFrom = sb.from.bind(sb);
 sb.from = function(table) {
   const query = _origFrom(table);
-  const _origSelect = query.select.bind(query);
-  query.select = function(...args) {
-    return _ensureSecureKey().then(() => _origSelect.apply(this, args));
-  };
-  const _origInsert = query.insert ? query.insert.bind(query) : null;
-  if (query.insert) {
-    query.insert = function(...args) {
-      return _ensureSecureKey().then(() => _origInsert.apply(this, args));
-    };
-  }
-  const _origUpsert = query.upsert ? query.upsert.bind(query) : null;
-  if (query.upsert) {
-    query.upsert = function(...args) {
-      return _ensureSecureKey().then(() => _origUpsert.apply(this, args));
-    };
-  }
-  const _origDelete = query.delete ? query.delete.bind(query) : null;
-  if (query.delete) {
-    query.delete = function(...args) {
-      return _ensureSecureKey().then(() => _origDelete.apply(this, args));
-    };
-  }
-  const _origUpdate = query.update ? query.update.bind(query) : null;
-  if (query.update) {
-    query.update = function(...args) {
-      return _ensureSecureKey().then(() => _origUpdate.apply(this, args));
-    };
-  }
+  // 包装所有会发起请求的方法
+  ['select','insert','upsert','update','delete'].forEach(method => {
+    if (query[method]) {
+      const origMethod = query[method].bind(query);
+      query[method] = function(...args) {
+        // 在请求前设置自定义header
+        this.headers = this.headers || {};
+        this.headers['x-app-secure-key'] = _getSecureKey();
+        return origMethod.apply(this, args);
+      };
+    }
+  });
   return query;
 };
 let categories = [];
