@@ -2044,6 +2044,18 @@ if ('serviceWorker' in navigator) {
     console.log('[PWA] Service Worker 注册失败:', err);
   });
 }
+
+// 强制竖屏
+(function() {
+  function lockPortrait() {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(() => {});
+    }
+  }
+  lockPortrait();
+  window.addEventListener('resize', lockPortrait);
+  document.addEventListener('fullscreenchange', lockPortrait);
+})();
 </script>
 </body>
 </html>
