@@ -551,7 +551,9 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 // ========== Supabase Auth 登录 ==========
 const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { storage: sessionStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+});
 
 let loginAttempts = 0;
 const MAX_ATTEMPTS = 10;
