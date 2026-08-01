@@ -141,12 +141,12 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 
 /* 分类树 */
 .cat-group { margin-bottom: 2px; }
-.cat-group.dragging { opacity: 0.4; }
-.cat-group.drag-over { background: #e6f4ff; border-radius: 6px; }
 .cat-header { display: flex; align-items: center; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background .2s; user-select: none; }
 .cat-header:hover { background: #f5f7fa; }
 .cat-header.cat-visible { background: #e6f4ff; }
 .cat-header.cat-visible .cat-name { color: #1677ff; }
+.cat-header.dragging { opacity: 0.4; }
+.cat-header.drag-over { background: #bcdcff !important; }
 .cat-arrow { width: 18px; font-size: 10px; color: #999; transition: transform .2s; flex-shrink: 0; text-align: center; }
 .cat-arrow.open { transform: rotate(90deg); }
 .cat-name { flex: 1; font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -158,12 +158,11 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .cat-children { padding-left: 16px; overflow: hidden; transition: max-height .3s; }
 .cat-children.collapsed { max-height: 0 !important; }
 .cat-sub { margin-bottom: 2px; }
-.cat-sub .cat-header { padding-left: 8px; }
+.cat-sub .cat-header { padding-left: 8px; cursor: grab; }
 .cat-sub .cat-name { font-weight: 500; font-size: 12px; color: #666; }
-.cat-drag-handle { cursor: grab; color: #ccc; font-size: 14px; padding: 0 4px; flex-shrink: 0; line-height: 1; user-select: auto; -webkit-user-select: auto; }
-.cat-drag-handle:hover { color: #999; }
-.cat-sub.dragging { opacity: 0.4; }
-.cat-sub.drag-over { background: #e6f4ff; border-radius: 6px; }
+.cat-sub.mouse-dragging { opacity: 0.3; }
+.cat-sub.mouse-drag-over { background: #bcdcff; border-radius: 6px; }
+.cat-mouse-clone { position: fixed; pointer-events: none; z-index: 10000; opacity: 0.85; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 6px; background: #fff; }
 
 /* 分类下的门店 */
 .cat-store-item { padding: 8px 10px 8px 20px; border-radius: 6px; cursor: pointer; transition: background .2s; margin-bottom: 2px; border: 1px solid transparent; }
@@ -1446,8 +1445,7 @@ function updateSidebar() {
       const totalCount = catStores.length + subStoreCount;
       const isOpen = !collapsedCats[cat.id];
       html += `<div class="cat-group" data-cat-id="${cat.id}">
-        <div class="cat-header ${isCategoryFullyVisible(cat.id)?'cat-visible':''}" onclick="onCatClick('${cat.id}');event.stopPropagation();" ondblclick="onCatDblClick('${cat.id}')">
-          <span class="cat-drag-handle" draggable="true" title="拖动排序">☰</span>
+        <div class="cat-header cat-draggable ${isCategoryFullyVisible(cat.id)?'cat-visible':''}" draggable="true" data-cat-id="${cat.id}" onclick="if(dragType)return;onCatClick('${cat.id}');event.stopPropagation();" ondblclick="onCatDblClick('${cat.id}')">
           <span class="cat-arrow ${isOpen?'open':''}">▶</span>
           <span class="cat-name">${cat.name}</span>
           <span class="cat-count">${totalCount}</span>
@@ -1461,8 +1459,7 @@ function updateSidebar() {
         const scStores = storeData.filter(s => s.categoryId === sc.id).sort((a, b) => naturalSort(a.name, b.name));
         const scOpen = !collapsedCats[sc.id];
         html += `<div class="cat-sub" data-sub-id="${sc.id}" data-parent-id="${cat.id}">
-          <div class="cat-header ${isCategoryFullyVisible(sc.id)?'cat-visible':''}" onclick="onCatClick('${sc.id}');event.stopPropagation();" ondblclick="onCatDblClick('${sc.id}')">
-            <span class="cat-drag-handle" draggable="true" title="拖动排序">☰</span>
+          <div class="cat-header ${isCategoryFullyVisible(sc.id)?'cat-visible':''}" data-sub-id="${sc.id}" data-parent-id="${cat.id}" onclick="if(dragType||mouseDrag.didDrag)return;onCatClick('${sc.id}');event.stopPropagation();" ondblclick="onCatDblClick('${sc.id}')">
             <span class="cat-arrow ${scOpen?'open':''}">▶</span>
             <span class="cat-name">${sc.name}</span>
             <span class="cat-count">${scStores.length}</span>
@@ -1580,112 +1577,62 @@ function isCategoryFullyVisible(catId) {
 
 // ========== 拖拽 ==========
 let dragStoreId = null;
-let dragSubCatId = null;
-let dragRootCatId = null;
+let dragType = ''; // '' | 'root'
+let dragCatId = '';
+
+// 二类鼠标拖拽状态
+let mouseDrag = { active: false, el: null, clone: null, startX: 0, startY: 0, targetId: '', didDrag: false };
+let mouseDragInited = false;
 
 function bindDragEvents() {
-  // 门店拖拽（移动到分类）
+  // 门店拖拽（HTML5）
   document.querySelectorAll('.cat-store-item').forEach(el => {
     el.addEventListener('dragstart', e => {
-      if (dragSubCatId || dragRootCatId) return; // 分类拖拽中，忽略
+      if (dragType) return;
       dragStoreId = el.dataset.id;
       el.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
     el.addEventListener('dragend', () => {
       el.classList.remove('dragging');
-      document.querySelectorAll('.cat-store-item').forEach(i => i.classList.remove('drag-over'));
+      document.querySelectorAll('.cat-store-item,.cat-header').forEach(i => i.classList.remove('drag-over'));
       dragStoreId = null;
     });
   });
-  // 分类标题作为门店拖拽的目标
-  document.querySelectorAll('.cat-header, .uncat-header').forEach(el => {
-    el.addEventListener('dragover', e => {
-      if (dragRootCatId || dragSubCatId) return; // 分类拖拽中，不干扰
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      el.style.background = '#e6f4ff';
-    });
-    el.addEventListener('dragleave', () => { el.style.background = ''; });
-    el.addEventListener('drop', async e => {
-      e.preventDefault();
-      el.style.background = '';
-      if (!dragStoreId || dragRootCatId || dragSubCatId) return;
-      const header = e.currentTarget;
-      let targetCatId = '';
-      if (header.classList.contains('uncat-header')) {
-        targetCatId = '';
-      } else {
-        const onclick = header.getAttribute('onclick');
-        const match = onclick.match(/onCatClick\('([^']+)'\)/);
-        if (match) targetCatId = match[1];
-      }
-      await moveStoreToCategory(dragStoreId, targetCatId);
-    });
-  });
-  // 分类拖拽排序（一级 + 二级）
-  document.querySelectorAll('.cat-drag-handle').forEach(handle => {
-    handle.addEventListener('dragstart', e => {
+
+  // 一类拖拽（HTML5）
+  document.querySelectorAll('.cat-draggable').forEach(el => {
+    el.addEventListener('dragstart', e => {
       e.stopPropagation();
-      const rootEl = handle.closest('.cat-group');
-      const subEl = handle.closest('.cat-sub');
-      if (subEl) {
-        dragSubCatId = subEl.dataset.subId;
-        subEl.classList.add('dragging');
-      } else if (rootEl) {
-        dragRootCatId = rootEl.dataset.catId;
-        rootEl.classList.add('dragging');
-      }
+      dragType = 'root';
+      dragCatId = el.dataset.catId || '';
+      el.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
-    handle.addEventListener('dragend', e => {
+    el.addEventListener('dragend', e => {
       e.stopPropagation();
-      const rootEl = handle.closest('.cat-group');
-      const subEl = handle.closest('.cat-sub');
-      if (subEl) subEl.classList.remove('dragging');
-      if (rootEl) rootEl.classList.remove('dragging');
-      document.querySelectorAll('.cat-sub,.cat-group').forEach(i => i.classList.remove('drag-over'));
-      dragSubCatId = null;
-      dragRootCatId = null;
+      el.classList.remove('dragging');
+      document.querySelectorAll('.cat-header').forEach(i => i.classList.remove('drag-over'));
+      dragType = '';
+      dragCatId = '';
     });
   });
-  // 一级分类拖拽排序
-  document.querySelectorAll('.cat-group').forEach(el => {
-    el.addEventListener('dragover', e => {
-      if (!dragRootCatId) return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.dataTransfer.dropEffect = 'move';
-      el.classList.add('drag-over');
-    });
-    el.addEventListener('dragleave', e => {
-      e.stopPropagation();
-      el.classList.remove('drag-over');
-    });
-    el.addEventListener('drop', async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      el.classList.remove('drag-over');
-      if (!dragRootCatId) return;
-      const targetId = el.dataset.catId;
-      if (dragRootCatId === targetId) return;
-      await reorderRootCats(dragRootCatId, targetId);
-    });
-  });
-  // 子分类拖拽排序
-  document.querySelectorAll('.cat-sub').forEach(el => {
+
+  // 一类标题：drop 目标（门店 + 一类拖拽）
+  document.querySelectorAll('.cat-group > .cat-header').forEach(el => {
     el.addEventListener('dragover', e => {
       e.preventDefault();
-      e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
-      if (dragSubCatId) {
-        el.classList.add('drag-over');
+      if (dragType === 'root') {
+        const groupEl = e.target.closest('.cat-group');
+        if (groupEl && groupEl.dataset.catId !== dragCatId) el.classList.add('drag-over');
       } else if (dragStoreId) {
         el.style.background = '#e6f4ff';
       }
     });
     el.addEventListener('dragleave', e => {
-      e.stopPropagation();
+      const related = e.relatedTarget;
+      if (related && el.contains(related)) return;
       el.classList.remove('drag-over');
       el.style.background = '';
     });
@@ -1694,16 +1641,118 @@ function bindDragEvents() {
       e.stopPropagation();
       el.classList.remove('drag-over');
       el.style.background = '';
-      if (dragSubCatId) {
-        const targetSubId = el.dataset.subId;
-        const parentId = el.dataset.parentId;
-        if (dragSubCatId === targetSubId) return;
-        await reorderSubCats(dragSubCatId, targetSubId, parentId);
+      if (dragType === 'root') {
+        const targetGroup = e.target.closest('.cat-group');
+        if (!targetGroup || !targetGroup.dataset.catId) return;
+        if (targetGroup.dataset.catId === dragCatId) return;
+        await reorderRootCats(dragCatId, targetGroup.dataset.catId);
       } else if (dragStoreId) {
-        const targetCatId = el.dataset.subId;
-        await moveStoreToCategory(dragStoreId, targetCatId);
+        const onclick = el.getAttribute('onclick');
+        const match = onclick && onclick.match(/onCatClick\('([^']+)'\)/);
+        await moveStoreToCategory(dragStoreId, match ? match[1] : '');
       }
     });
+  });
+
+  // 二类标题：门店 drop 目标
+  document.querySelectorAll('.cat-sub > .cat-header').forEach(el => {
+    el.addEventListener('dragover', e => {
+      if (dragStoreId) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        el.style.background = '#e6f4ff';
+      }
+    });
+    el.addEventListener('dragleave', e => {
+      const related = e.relatedTarget;
+      if (related && el.contains(related)) return;
+      el.style.background = '';
+    });
+    el.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.style.background = '';
+      if (dragStoreId) {
+        const onclick = el.getAttribute('onclick');
+        const match = onclick && onclick.match(/onCatClick\('([^']+)'\)/);
+        await moveStoreToCategory(dragStoreId, match ? match[1] : '');
+      }
+    });
+  });
+
+  // 二类拖拽（鼠标事件模拟）
+  initMouseDrag();
+  document.querySelectorAll('.cat-sub > .cat-header').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      if (e.button !== 0) return; // 只要左键
+      mouseDrag.el = el.closest('.cat-sub');
+      mouseDrag.startX = e.clientX;
+      mouseDrag.startY = e.clientY;
+    });
+  });
+}
+
+function initMouseDrag() {
+  if (mouseDragInited) return;
+  mouseDragInited = true;
+
+  document.addEventListener('mousemove', e => {
+    if (!mouseDrag.el || mouseDrag.active) return;
+    const dx = e.clientX - mouseDrag.startX;
+    const dy = e.clientY - mouseDrag.startY;
+    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+    // 超过 5px 阈值，开始拖拽
+    mouseDrag.active = true;
+    mouseDrag.didDrag = true;
+    const rect = mouseDrag.el.getBoundingClientRect();
+    mouseDrag.el.classList.add('mouse-dragging');
+    // 创建克隆体跟随鼠标
+    mouseDrag.clone = mouseDrag.el.cloneNode(true);
+    mouseDrag.clone.className = mouseDrag.el.className.replace('mouse-dragging', '') + ' cat-mouse-clone';
+    mouseDrag.clone.style.width = rect.width + 'px';
+    mouseDrag.clone.style.left = rect.left + 'px';
+    mouseDrag.clone.style.top = rect.top + 'px';
+    document.body.appendChild(mouseDrag.clone);
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!mouseDrag.active) return;
+    // 更新克隆体位置
+    mouseDrag.clone.style.top = (e.clientY - 20) + 'px';
+    // 找鼠标下的目标
+    mouseDrag.clone.style.display = 'none';
+    const realEl = document.elementFromPoint(e.clientX, e.clientY);
+    mouseDrag.clone.style.display = '';
+    // 清除所有高亮
+    document.querySelectorAll('.cat-sub.mouse-drag-over').forEach(i => i.classList.remove('mouse-drag-over'));
+    mouseDrag.targetId = '';
+    if (realEl) {
+      const subEl = realEl.closest('.cat-sub');
+      if (subEl && subEl !== mouseDrag.el && subEl.dataset.parentId === mouseDrag.el.dataset.parentId) {
+        subEl.classList.add('mouse-drag-over');
+        mouseDrag.targetId = subEl.dataset.subId;
+      }
+    }
+  });
+
+  document.addEventListener('mouseup', async e => {
+    if (!mouseDrag.active) { mouseDrag.el = null; return; }
+    mouseDrag.active = false;
+    // 清理 DOM
+    document.querySelectorAll('.cat-sub.mouse-drag-over').forEach(i => i.classList.remove('mouse-drag-over'));
+    if (mouseDrag.el) mouseDrag.el.classList.remove('mouse-dragging');
+    if (mouseDrag.clone) mouseDrag.clone.remove();
+    // 执行互换
+    if (mouseDrag.targetId && mouseDrag.el) {
+      const dragId = mouseDrag.el.dataset.subId;
+      if (dragId && dragId !== mouseDrag.targetId) {
+        await reorderSubCats(dragId, mouseDrag.targetId, mouseDrag.el.dataset.parentId);
+      }
+    }
+    mouseDrag.el = null;
+    mouseDrag.clone = null;
+    mouseDrag.targetId = '';
+    setTimeout(() => { mouseDrag.didDrag = false; }, 50);
   });
 }
 
@@ -1711,34 +1760,27 @@ async function reorderRootCats(dragId, targetId) {
   const rootCats = categories.filter(c => !c.parentId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const dragIdx = rootCats.findIndex(c => c.id === dragId);
   const targetIdx = rootCats.findIndex(c => c.id === targetId);
-  if (dragIdx < 0 || targetIdx < 0) return;
+  if (dragIdx < 0 || targetIdx < 0 || dragIdx === targetIdx) return;
   const [moved] = rootCats.splice(dragIdx, 1);
   rootCats.splice(targetIdx, 0, moved);
-  for (let i = 0; i < rootCats.length; i++) {
-    rootCats[i].sortOrder = i;
-    await saveCatToDB(rootCats[i]);
-  }
+  for (let i = 0; i < rootCats.length; i++) rootCats[i].sortOrder = i;
   markDirty();
   updateSidebar();
-  showToast('排序已更新', 'success');
+  rootCats.forEach(c => saveCatToDB(c));
 }
 
 async function reorderSubCats(dragId, targetId, parentId) {
-  const subCats = categories.filter(c => c.parentId === parentId);
-  const dragIdx = subCats.findIndex(c => c.id === dragId);
-  const targetIdx = subCats.findIndex(c => c.id === targetId);
-  if (dragIdx < 0 || targetIdx < 0) return;
-  // 交换顺序
-  const [moved] = subCats.splice(dragIdx, 1);
-  subCats.splice(targetIdx, 0, moved);
-  // 更新 sort_order 并保存
-  for (let i = 0; i < subCats.length; i++) {
-    subCats[i].sortOrder = i;
-    await saveCatToDB(subCats[i]);
-  }
+  const dragCat = categories.find(c => c.id === dragId);
+  const targetCat = categories.find(c => c.id === targetId);
+  if (!dragCat || !targetCat) return;
+  // 直接互换 sortOrder
+  const tmp = dragCat.sortOrder;
+  dragCat.sortOrder = targetCat.sortOrder;
+  targetCat.sortOrder = tmp;
   markDirty();
   updateSidebar();
-  showToast('排序已更新', 'success');
+  saveCatToDB(dragCat);
+  saveCatToDB(targetCat);
 }
 
 async function moveStoreToCategory(storeId, categoryId) {
