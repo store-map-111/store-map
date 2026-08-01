@@ -557,6 +557,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 let loginAttempts = 0;
 const MAX_ATTEMPTS = 10;
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30分钟
 let lockoutUntil = parseInt(sessionStorage.getItem('lockoutUntil') || '0');
 
 function createLoginOverlay() {
@@ -584,6 +585,12 @@ function createLoginOverlay() {
 async function checkLoginState() {
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
+    const loginTime = parseInt(localStorage.getItem('loginTime') || '0');
+    if (loginTime && Date.now() - loginTime > SESSION_TIMEOUT) {
+      await sb.auth.signOut();
+      createLoginOverlay();
+      return false;
+    }
     const overlay = document.getElementById('loginOverlay');
     if (overlay) overlay.remove();
     return true;
@@ -619,6 +626,7 @@ async function doLogin() {
     document.getElementById('loginPass').value = '';
   } else {
     sessionStorage.removeItem('lockoutUntil');
+    localStorage.setItem('loginTime', Date.now().toString());
     const overlay = document.getElementById('loginOverlay');
     if (overlay) overlay.remove();
     setTimeout(() => { initMap(); }, 300);
