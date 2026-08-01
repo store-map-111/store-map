@@ -141,6 +141,8 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 
 /* 分类树 */
 .cat-group { margin-bottom: 2px; }
+.cat-group.dragging { opacity: 0.4; }
+.cat-group.drag-over { background: #e6f4ff; border-radius: 6px; }
 .cat-header { display: flex; align-items: center; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background .2s; user-select: none; }
 .cat-header:hover { background: #f5f7fa; }
 .cat-header.cat-visible { background: #e6f4ff; }
@@ -158,6 +160,10 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .cat-sub { margin-bottom: 2px; }
 .cat-sub .cat-header { padding-left: 8px; }
 .cat-sub .cat-name { font-weight: 500; font-size: 12px; color: #666; }
+.cat-drag-handle { cursor: grab; color: #ccc; font-size: 14px; padding: 0 4px; flex-shrink: 0; line-height: 1; user-select: auto; -webkit-user-select: auto; }
+.cat-drag-handle:hover { color: #999; }
+.cat-sub.dragging { opacity: 0.4; }
+.cat-sub.drag-over { background: #e6f4ff; border-radius: 6px; }
 
 /* 分类下的门店 */
 .cat-store-item { padding: 8px 10px 8px 20px; border-radius: 6px; cursor: pointer; transition: background .2s; margin-bottom: 2px; border: 1px solid transparent; }
@@ -774,6 +780,15 @@ async function loadCategories() {
   const { data, error } = await sb.rpc('rpc_select_categories');
   if (error) { console.error('加载分类失败:', error); categories = []; return categories; }
   categories = (data || []).map(r => toCamel(r, CAT_FIELD_MAP));
+  // 为没有 sortOrder 的分类自动分配
+  const groups = {};
+  categories.forEach(c => { const p = c.parentId || '_root'; (groups[p] = groups[p] || []).push(c); });
+  const toSave = [];
+  for (const p in groups) {
+    groups[p].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    groups[p].forEach((c, i) => { if (c.sortOrder == null) { c.sortOrder = i; toSave.push(c); } });
+  }
+  for (const c of toSave) { await saveCatToDB(c); }
   return categories;
 }
 
@@ -1249,10 +1264,13 @@ function populateCatParentSelect(excludeId) {
 async function saveCategory() {
   const name = document.getElementById('catName').value.trim();
   if (!name) { showToast('请输入分类名称', 'error'); return; }
+  const parentId = document.getElementById('catParent').value || '';
+  const siblings = categories.filter(c => c.parentId === parentId);
   const data = {
     id: Date.now().toString(),
     name,
-    parentId: document.getElementById('catParent').value || ''
+    parentId,
+    sortOrder: siblings.length
   };
   await saveCatToDB(data);
   categories.push(data);
@@ -1414,7 +1432,7 @@ function naturalSort(a, b) {
 }
 function updateSidebar() {
   const list = document.getElementById('storeList');
-  const rootCats = categories.filter(c => !c.parentId);
+  const rootCats = categories.filter(c => !c.parentId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const uncatStores = storeData.filter(s => !s.categoryId || !categories.find(c => c.id === s.categoryId)).sort((a, b) => naturalSort(a.name, b.name));
 
   if (storeData.length === 0 && categories.length === 0) {
@@ -1422,13 +1440,14 @@ function updateSidebar() {
   } else {
     let html = '';
     rootCats.forEach(cat => {
-      const subCats = categories.filter(c => c.parentId === cat.id);
+      const subCats = categories.filter(c => c.parentId === cat.id).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       const catStores = storeData.filter(s => s.categoryId === cat.id).sort((a, b) => naturalSort(a.name, b.name));
       const subStoreCount = subCats.reduce((sum, sc) => sum + storeData.filter(s => s.categoryId === sc.id).length, 0);
       const totalCount = catStores.length + subStoreCount;
       const isOpen = !collapsedCats[cat.id];
-      html += `<div class="cat-group">
+      html += `<div class="cat-group" data-cat-id="${cat.id}">
         <div class="cat-header ${isCategoryFullyVisible(cat.id)?'cat-visible':''}" onclick="onCatClick('${cat.id}');event.stopPropagation();" ondblclick="onCatDblClick('${cat.id}')">
+          <span class="cat-drag-handle" draggable="true" title="拖动排序">☰</span>
           <span class="cat-arrow ${isOpen?'open':''}">▶</span>
           <span class="cat-name">${cat.name}</span>
           <span class="cat-count">${totalCount}</span>
@@ -1441,8 +1460,9 @@ function updateSidebar() {
       subCats.forEach(sc => {
         const scStores = storeData.filter(s => s.categoryId === sc.id).sort((a, b) => naturalSort(a.name, b.name));
         const scOpen = !collapsedCats[sc.id];
-        html += `<div class="cat-sub">
+        html += `<div class="cat-sub" data-sub-id="${sc.id}" data-parent-id="${cat.id}">
           <div class="cat-header ${isCategoryFullyVisible(sc.id)?'cat-visible':''}" onclick="onCatClick('${sc.id}');event.stopPropagation();" ondblclick="onCatDblClick('${sc.id}')">
+            <span class="cat-drag-handle" draggable="true" title="拖动排序">☰</span>
             <span class="cat-arrow ${scOpen?'open':''}">▶</span>
             <span class="cat-name">${sc.name}</span>
             <span class="cat-count">${scStores.length}</span>
@@ -1560,10 +1580,14 @@ function isCategoryFullyVisible(catId) {
 
 // ========== 拖拽 ==========
 let dragStoreId = null;
+let dragSubCatId = null;
+let dragRootCatId = null;
 
 function bindDragEvents() {
+  // 门店拖拽（移动到分类）
   document.querySelectorAll('.cat-store-item').forEach(el => {
     el.addEventListener('dragstart', e => {
+      if (dragSubCatId || dragRootCatId) return; // 分类拖拽中，忽略
       dragStoreId = el.dataset.id;
       el.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
@@ -1574,13 +1598,19 @@ function bindDragEvents() {
       dragStoreId = null;
     });
   });
+  // 分类标题作为门店拖拽的目标
   document.querySelectorAll('.cat-header, .uncat-header').forEach(el => {
-    el.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.style.background = '#e6f4ff'; });
+    el.addEventListener('dragover', e => {
+      if (dragRootCatId || dragSubCatId) return; // 分类拖拽中，不干扰
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.style.background = '#e6f4ff';
+    });
     el.addEventListener('dragleave', () => { el.style.background = ''; });
     el.addEventListener('drop', async e => {
       e.preventDefault();
       el.style.background = '';
-      if (!dragStoreId) return;
+      if (!dragStoreId || dragRootCatId || dragSubCatId) return;
       const header = e.currentTarget;
       let targetCatId = '';
       if (header.classList.contains('uncat-header')) {
@@ -1593,6 +1623,122 @@ function bindDragEvents() {
       await moveStoreToCategory(dragStoreId, targetCatId);
     });
   });
+  // 分类拖拽排序（一级 + 二级）
+  document.querySelectorAll('.cat-drag-handle').forEach(handle => {
+    handle.addEventListener('dragstart', e => {
+      e.stopPropagation();
+      const rootEl = handle.closest('.cat-group');
+      const subEl = handle.closest('.cat-sub');
+      if (subEl) {
+        dragSubCatId = subEl.dataset.subId;
+        subEl.classList.add('dragging');
+      } else if (rootEl) {
+        dragRootCatId = rootEl.dataset.catId;
+        rootEl.classList.add('dragging');
+      }
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    handle.addEventListener('dragend', e => {
+      e.stopPropagation();
+      const rootEl = handle.closest('.cat-group');
+      const subEl = handle.closest('.cat-sub');
+      if (subEl) subEl.classList.remove('dragging');
+      if (rootEl) rootEl.classList.remove('dragging');
+      document.querySelectorAll('.cat-sub,.cat-group').forEach(i => i.classList.remove('drag-over'));
+      dragSubCatId = null;
+      dragRootCatId = null;
+    });
+  });
+  // 一级分类拖拽排序
+  document.querySelectorAll('.cat-group').forEach(el => {
+    el.addEventListener('dragover', e => {
+      if (!dragRootCatId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', e => {
+      e.stopPropagation();
+      el.classList.remove('drag-over');
+    });
+    el.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drag-over');
+      if (!dragRootCatId) return;
+      const targetId = el.dataset.catId;
+      if (dragRootCatId === targetId) return;
+      await reorderRootCats(dragRootCatId, targetId);
+    });
+  });
+  // 子分类拖拽排序
+  document.querySelectorAll('.cat-sub').forEach(el => {
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      if (dragSubCatId) {
+        el.classList.add('drag-over');
+      } else if (dragStoreId) {
+        el.style.background = '#e6f4ff';
+      }
+    });
+    el.addEventListener('dragleave', e => {
+      e.stopPropagation();
+      el.classList.remove('drag-over');
+      el.style.background = '';
+    });
+    el.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drag-over');
+      el.style.background = '';
+      if (dragSubCatId) {
+        const targetSubId = el.dataset.subId;
+        const parentId = el.dataset.parentId;
+        if (dragSubCatId === targetSubId) return;
+        await reorderSubCats(dragSubCatId, targetSubId, parentId);
+      } else if (dragStoreId) {
+        const targetCatId = el.dataset.subId;
+        await moveStoreToCategory(dragStoreId, targetCatId);
+      }
+    });
+  });
+}
+
+async function reorderRootCats(dragId, targetId) {
+  const rootCats = categories.filter(c => !c.parentId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const dragIdx = rootCats.findIndex(c => c.id === dragId);
+  const targetIdx = rootCats.findIndex(c => c.id === targetId);
+  if (dragIdx < 0 || targetIdx < 0) return;
+  const [moved] = rootCats.splice(dragIdx, 1);
+  rootCats.splice(targetIdx, 0, moved);
+  for (let i = 0; i < rootCats.length; i++) {
+    rootCats[i].sortOrder = i;
+    await saveCatToDB(rootCats[i]);
+  }
+  markDirty();
+  updateSidebar();
+  showToast('排序已更新', 'success');
+}
+
+async function reorderSubCats(dragId, targetId, parentId) {
+  const subCats = categories.filter(c => c.parentId === parentId);
+  const dragIdx = subCats.findIndex(c => c.id === dragId);
+  const targetIdx = subCats.findIndex(c => c.id === targetId);
+  if (dragIdx < 0 || targetIdx < 0) return;
+  // 交换顺序
+  const [moved] = subCats.splice(dragIdx, 1);
+  subCats.splice(targetIdx, 0, moved);
+  // 更新 sort_order 并保存
+  for (let i = 0; i < subCats.length; i++) {
+    subCats[i].sortOrder = i;
+    await saveCatToDB(subCats[i]);
+  }
+  markDirty();
+  updateSidebar();
+  showToast('排序已更新', 'success');
 }
 
 async function moveStoreToCategory(storeId, categoryId) {
