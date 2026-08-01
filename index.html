@@ -1680,7 +1680,7 @@ function bindDragEvents() {
     });
   });
 
-  // 二类拖拽（鼠标事件模拟）
+  // 二类拖拽（鼠标+触摸事件模拟）
   initMouseDrag();
   document.querySelectorAll('.cat-sub > .cat-header').forEach(el => {
     el.addEventListener('mousedown', e => {
@@ -1689,6 +1689,12 @@ function bindDragEvents() {
       mouseDrag.startX = e.clientX;
       mouseDrag.startY = e.clientY;
     });
+    el.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      mouseDrag.el = el.closest('.cat-sub');
+      mouseDrag.startX = t.clientX;
+      mouseDrag.startY = t.clientY;
+    }, { passive: true });
   });
 }
 
@@ -1696,34 +1702,32 @@ function initMouseDrag() {
   if (mouseDragInited) return;
   mouseDragInited = true;
 
-  document.addEventListener('mousemove', e => {
-    if (!mouseDrag.el || mouseDrag.active) return;
-    const dx = e.clientX - mouseDrag.startX;
-    const dy = e.clientY - mouseDrag.startY;
-    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
-    // 超过 5px 阈值，开始拖拽
+  // 获取坐标：兼容鼠标和触摸
+  function getXY(e) {
+    if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  // 开始拖拽（提取公共逻辑）
+  function startDrag(x, y) {
     mouseDrag.active = true;
     mouseDrag.didDrag = true;
     const rect = mouseDrag.el.getBoundingClientRect();
     mouseDrag.el.classList.add('mouse-dragging');
-    // 创建克隆体跟随鼠标
     mouseDrag.clone = mouseDrag.el.cloneNode(true);
     mouseDrag.clone.className = mouseDrag.el.className.replace('mouse-dragging', '') + ' cat-mouse-clone';
     mouseDrag.clone.style.width = rect.width + 'px';
     mouseDrag.clone.style.left = rect.left + 'px';
     mouseDrag.clone.style.top = rect.top + 'px';
     document.body.appendChild(mouseDrag.clone);
-  });
+  }
 
-  document.addEventListener('mousemove', e => {
-    if (!mouseDrag.active) return;
-    // 更新克隆体位置
-    mouseDrag.clone.style.top = (e.clientY - 20) + 'px';
-    // 找鼠标下的目标
+  // 拖拽中（提取公共逻辑）
+  function moveDrag(x, y) {
+    mouseDrag.clone.style.top = (y - 20) + 'px';
     mouseDrag.clone.style.display = 'none';
-    const realEl = document.elementFromPoint(e.clientX, e.clientY);
+    const realEl = document.elementFromPoint(x, y);
     mouseDrag.clone.style.display = '';
-    // 清除所有高亮
     document.querySelectorAll('.cat-sub.mouse-drag-over').forEach(i => i.classList.remove('mouse-drag-over'));
     mouseDrag.targetId = '';
     if (realEl) {
@@ -1733,16 +1737,15 @@ function initMouseDrag() {
         mouseDrag.targetId = subEl.dataset.subId;
       }
     }
-  });
+  }
 
-  document.addEventListener('mouseup', async e => {
+  // 结束拖拽（提取公共逻辑）
+  async function endDrag() {
     if (!mouseDrag.active) { mouseDrag.el = null; return; }
     mouseDrag.active = false;
-    // 清理 DOM
     document.querySelectorAll('.cat-sub.mouse-drag-over').forEach(i => i.classList.remove('mouse-drag-over'));
     if (mouseDrag.el) mouseDrag.el.classList.remove('mouse-dragging');
     if (mouseDrag.clone) mouseDrag.clone.remove();
-    // 执行互换
     if (mouseDrag.targetId && mouseDrag.el) {
       const dragId = mouseDrag.el.dataset.subId;
       if (dragId && dragId !== mouseDrag.targetId) {
@@ -1753,7 +1756,36 @@ function initMouseDrag() {
     mouseDrag.clone = null;
     mouseDrag.targetId = '';
     setTimeout(() => { mouseDrag.didDrag = false; }, 50);
+  }
+
+  // 鼠标事件
+  document.addEventListener('mousemove', e => {
+    if (!mouseDrag.el || mouseDrag.active) return;
+    const { x, y } = getXY(e);
+    if (Math.abs(x - mouseDrag.startX) < 5 && Math.abs(y - mouseDrag.startY) < 5) return;
+    startDrag(x, y);
   });
+  document.addEventListener('mousemove', e => {
+    if (!mouseDrag.active) return;
+    const { x, y } = getXY(e);
+    moveDrag(x, y);
+  });
+  document.addEventListener('mouseup', () => endDrag());
+
+  // 触摸事件
+  document.addEventListener('touchmove', e => {
+    if (!mouseDrag.el) return;
+    const { x, y } = getXY(e);
+    if (!mouseDrag.active) {
+      if (Math.abs(x - mouseDrag.startX) < 5 && Math.abs(y - mouseDrag.startY) < 5) return;
+      startDrag(x, y);
+      e.preventDefault(); // 阻止滚动
+      return;
+    }
+    e.preventDefault(); // 阻止滚动
+    moveDrag(x, y);
+  }, { passive: false });
+  document.addEventListener('touchend', () => endDrag());
 }
 
 async function reorderRootCats(dragId, targetId) {
