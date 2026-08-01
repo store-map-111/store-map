@@ -630,28 +630,9 @@ const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ========== 安全密钥（通过自定义Header传递）==========
+// ========== 安全密钥（混淆存储，通过RPC函数传递）==========
 const _SK = [115,109,50,48,50,54,95,115,101,99,117,114,101,95,107,101,121,95,120,75,57,109,80,50,118,76,55,110,81,52];
 function _getSecureKey() { return String.fromCharCode(..._SK); }
-
-// 包装 sb.from，每次请求带上自定义Header
-const _origFrom = sb.from.bind(sb);
-sb.from = function(table) {
-  const query = _origFrom(table);
-  // 包装所有会发起请求的方法
-  ['select','insert','upsert','update','delete'].forEach(method => {
-    if (query[method]) {
-      const origMethod = query[method].bind(query);
-      query[method] = function(...args) {
-        // 在请求前设置自定义header
-        this.headers = this.headers || {};
-        this.headers['x-app-secure-key'] = _getSecureKey();
-        return origMethod.apply(this, args);
-      };
-    }
-  });
-  return query;
-};
 let categories = [];
 let iconLibrary = [];
 let collapsedCats = {};
@@ -719,13 +700,13 @@ async function migrateFromIndexedDB() {
     console.log('[迁移] 检查云端数据...');
     let cloudCount = 0;
     try {
-      const { count, error } = await sb.from('stores').select('*', { count: 'exact', head: true });
+      const { data: countData, error } = await sb.rpc('rpc_count_stores', { p_key: _getSecureKey() });
       if (error) {
         console.error('[迁移] 检查云端失败:', error.message);
         showToast('云端连接失败: ' + error.message, 'error');
         return;
       }
-      cloudCount = count || 0;
+      cloudCount = countData || 0;
       console.log('[迁移] 云端门店数:', cloudCount);
     } catch (e) {
       console.error('[迁移] Supabase连接失败:', e);
@@ -745,17 +726,17 @@ async function migrateFromIndexedDB() {
     }
     // 迁移门店
     for (const s of oldStores) {
-      const { error } = await sb.from('stores').upsert(toSnake(s, STORE_FIELD_MAP));
+      const { error } = await sb.rpc('rpc_upsert_store', { p_key: _getSecureKey(), p_row: toSnake(s, STORE_FIELD_MAP) });
       if (error) console.error('迁移门店失败:', s.name, error.message);
     }
     // 迁移分类
     for (const c of oldCats) {
-      const { error } = await sb.from('categories').upsert(toSnake(c, CAT_FIELD_MAP));
+      const { error } = await sb.rpc('rpc_upsert_category', { p_key: _getSecureKey(), p_row: toSnake(c, CAT_FIELD_MAP) });
       if (error) console.error('迁移分类失败:', c.name, error.message);
     }
     // 迁移图标库
     for (const i of oldIcons) {
-      const { error } = await sb.from('icon_library').insert({ id: i.id, name: i.name, data: i.data });
+      const { error } = await sb.rpc('rpc_insert_icon', { p_key: _getSecureKey(), p_id: i.id, p_name: i.name, p_data: i.data });
       if (error) console.error('迁移图标失败:', i.id, error.message);
     }
     showToast(`已从本地迁移 ${oldStores.length} 家门店到云端`, 'success');
@@ -769,7 +750,7 @@ async function loadStores() {
   console.log('[迁移] 开始检查...');
   await migrateFromIndexedDB();
   console.log('[迁移] 完成，开始从云端加载...');
-  const { data, error } = await sb.from('stores').select('*');
+  const { data, error } = await sb.rpc('rpc_select_stores', { p_key: _getSecureKey() });
   console.log('[云端] 加载结果:', data ? data.length + '条' : 'null', error || '');
   if (error) { console.error('加载门店失败:', error); storeData = []; return storeData; }
   storeData = (data || []).map(r => toCamel(r, STORE_FIELD_MAP));
@@ -778,7 +759,7 @@ async function loadStores() {
 }
 
 async function loadCategories() {
-  const { data, error } = await sb.from('categories').select('*').order('sort_order');
+  const { data, error } = await sb.rpc('rpc_select_categories', { p_key: _getSecureKey() });
   if (error) { console.error('加载分类失败:', error); categories = []; return categories; }
   categories = (data || []).map(r => toCamel(r, CAT_FIELD_MAP));
   return categories;
@@ -786,18 +767,18 @@ async function loadCategories() {
 
 async function saveCatToDB(data) {
   const row = toSnake(data, CAT_FIELD_MAP);
-  const { error } = await sb.from('categories').upsert(row);
+  const { error } = await sb.rpc('rpc_upsert_category', { p_key: _getSecureKey(), p_row: row });
   if (error) console.error('保存分类失败:', error);
 }
 
 async function deleteCatFromDB(id) {
-  const { error } = await sb.from('categories').delete().eq('id', id);
+  const { error } = await sb.rpc('rpc_delete_category', { p_key: _getSecureKey(), p_id: id });
   if (error) console.error('删除分类失败:', error);
 }
 
 async function loadIconLibrary() {
   console.log('[图标库] 开始从云端加载...');
-  const { data, error } = await sb.from('icon_library').select('*');
+  const { data, error } = await sb.rpc('rpc_select_icons', { p_key: _getSecureKey() });
   if (error) { console.error('[图标库] 加载失败:', error); iconLibrary = []; return iconLibrary; }
   iconLibrary = data || [];
   console.log('[图标库] 加载成功, 共', iconLibrary.length, '个图标');
@@ -809,27 +790,27 @@ async function saveIconToDB(data) {
   // 只插入表里实际存在的字段
   const insertData = { id: data.id, name: data.name, data: data.data };
   // 先检查是否已存在，避免重复插入
-  const { data: existing, error: checkErr } = await sb.from('icon_library').select('id').eq('id', data.id).limit(1);
+  const { data: existing, error: checkErr } = await sb.rpc('rpc_select_icon_by_id', { p_key: _getSecureKey(), p_id: data.id });
   if (checkErr) { console.error('[图标库] 检查重复失败:', checkErr); }
   if (existing && existing.length > 0) { console.log('[图标库] 图标已存在，跳过'); return; }
-  const { data: inserted, error } = await sb.from('icon_library').insert(insertData).select();
+  const { data: inserted, error } = await sb.rpc('rpc_insert_icon', { p_key: _getSecureKey(), p_id: data.id, p_name: data.name, p_data: data.data });
   if (error) { console.error('[图标库] 插入失败:', error); }
   else { console.log('[图标库] 插入成功:', inserted); }
 }
 
 async function deleteIconFromDB(id) {
-  const { error } = await sb.from('icon_library').delete().eq('id', id);
+  const { error } = await sb.rpc('rpc_delete_icon', { p_key: _getSecureKey(), p_id: id });
   if (error) console.error('删除图标失败:', error);
 }
 
 async function saveToDB(data) {
   const row = toSnake(data, STORE_FIELD_MAP);
-  const { error } = await sb.from('stores').upsert(row);
+  const { error } = await sb.rpc('rpc_upsert_store', { p_key: _getSecureKey(), p_row: row });
   if (error) console.error('保存门店失败:', error);
 }
 
 async function deleteFromDB(id) {
-  const { error } = await sb.from('stores').delete().eq('id', id);
+  const { error } = await sb.rpc('rpc_delete_store', { p_key: _getSecureKey(), p_id: id });
   if (error) console.error('删除门店失败:', error);
 }
 
