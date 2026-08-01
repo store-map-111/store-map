@@ -548,16 +548,15 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 </div>
 
 <script>
-// ========== 登录验证 ==========
-const _LU = [97,100,109,105,110];
-const _LP = [115,121,115,116,101,109];
-function _getUser() { return String.fromCharCode(..._LU); }
-function _getPass() { return String.fromCharCode(..._LP); }
+// ========== Supabase Auth 登录 ==========
+const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 let loginAttempts = 0;
 const MAX_ATTEMPTS = 10;
 let lockoutUntil = parseInt(sessionStorage.getItem('lockoutUntil') || '0');
 
-// 动态创建登录遮罩
 function createLoginOverlay() {
   const overlay = document.createElement('div');
   overlay.className = 'login-overlay';
@@ -580,8 +579,9 @@ function createLoginOverlay() {
   document.body.appendChild(overlay);
 }
 
-function checkLoginState() {
-  if (sessionStorage.getItem('loggedIn') === '1') {
+async function checkLoginState() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
     const overlay = document.getElementById('loginOverlay');
     if (overlay) overlay.remove();
     return true;
@@ -590,7 +590,7 @@ function checkLoginState() {
   return false;
 }
 
-function doLogin() {
+async function doLogin() {
   const now = Date.now();
   if (now < lockoutUntil) {
     const mins = Math.ceil((lockoutUntil - now) / 60000);
@@ -599,17 +599,13 @@ function doLogin() {
   }
   const user = document.getElementById('loginUser').value.trim();
   const pass = document.getElementById('loginPass').value;
-  if (user === _getUser() && pass === _getPass()) {
-    sessionStorage.setItem('loggedIn', '1');
-    sessionStorage.removeItem('lockoutUntil');
-    const overlay = document.getElementById('loginOverlay');
-    if (overlay) overlay.remove();
-    // 延迟初始化地图，等浏览器完成布局重排
-    setTimeout(() => {
-      console.log('[登录] 登录成功，开始初始化地图');
-      initMap();
-    }, 300);
-  } else {
+  const btn = document.querySelector('.login-btn');
+  btn.textContent = '登录中...';
+  btn.disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email: user, password: pass });
+  btn.textContent = '登 录';
+  btn.disabled = false;
+  if (error) {
     loginAttempts++;
     if (loginAttempts >= MAX_ATTEMPTS) {
       lockoutUntil = now + 60 * 60 * 1000;
@@ -619,8 +615,19 @@ function doLogin() {
       document.getElementById('loginError').textContent = `账号或密码错误（还剩${MAX_ATTEMPTS - loginAttempts}次机会）`;
     }
     document.getElementById('loginPass').value = '';
+  } else {
+    sessionStorage.removeItem('lockoutUntil');
+    const overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.remove();
+    setTimeout(() => { initMap(); }, 300);
   }
 }
+
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    createLoginOverlay();
+  }
+});
 
 // ========== 全局变量 ==========
 let map = null;
@@ -628,13 +635,6 @@ let markers = [];
 let storeData = [];
 let currentClickLngLat = null;
 let editingId = null;
-const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// ========== 数据验证 ==========
-const _SK = [115,109,50,48,50,54,95,115,101,99,117,114,101,95,107,101,121,95,120,75,57,109,80,50,118,76,55,110,81,52];
-function _getSecureKey() { return String.fromCharCode(..._SK); }
 let categories = [];
 let iconLibrary = [];
 let collapsedCats = {};
@@ -702,7 +702,7 @@ async function migrateFromIndexedDB() {
     console.log('[迁移] 检查云端数据...');
     let cloudCount = 0;
     try {
-      const { data: countData, error } = await sb.rpc('rpc_count_stores', { p_key: _getSecureKey() });
+      const { data: countData, error } = await sb.rpc('rpc_count_stores');
       if (error) {
         console.error('[迁移] 检查云端失败:', error.message);
         showToast('云端连接失败: ' + error.message, 'error');
@@ -728,17 +728,17 @@ async function migrateFromIndexedDB() {
     }
     // 迁移门店
     for (const s of oldStores) {
-      const { error } = await sb.rpc('rpc_upsert_store', { p_key: _getSecureKey(), p_row: toSnake(s, STORE_FIELD_MAP) });
+      const { error } = await sb.rpc('rpc_upsert_store', { p_row: toSnake(s, STORE_FIELD_MAP) });
       if (error) console.error('迁移门店失败:', s.name, error.message);
     }
     // 迁移分类
     for (const c of oldCats) {
-      const { error } = await sb.rpc('rpc_upsert_category', { p_key: _getSecureKey(), p_row: toSnake(c, CAT_FIELD_MAP) });
+      const { error } = await sb.rpc('rpc_upsert_category', { p_row: toSnake(c, CAT_FIELD_MAP) });
       if (error) console.error('迁移分类失败:', c.name, error.message);
     }
     // 迁移图标库
     for (const i of oldIcons) {
-      const { error } = await sb.rpc('rpc_insert_icon', { p_key: _getSecureKey(), p_id: i.id, p_name: i.name, p_data: i.data });
+      const { error } = await sb.rpc('rpc_insert_icon', { p_id: i.id, p_name: i.name, p_data: i.data });
       if (error) console.error('迁移图标失败:', i.id, error.message);
     }
     showToast(`已从本地迁移 ${oldStores.length} 家门店到云端`, 'success');
@@ -752,7 +752,7 @@ async function loadStores() {
   console.log('[迁移] 开始检查...');
   await migrateFromIndexedDB();
   console.log('[迁移] 完成，开始从云端加载...');
-  const { data, error } = await sb.rpc('rpc_select_stores', { p_key: _getSecureKey() });
+  const { data, error } = await sb.rpc('rpc_select_stores');
   console.log('[云端] 加载结果:', data ? data.length + '条' : 'null', error || '');
   if (error) { console.error('加载门店失败:', error); storeData = []; return storeData; }
   storeData = (data || []).map(r => toCamel(r, STORE_FIELD_MAP));
@@ -761,7 +761,7 @@ async function loadStores() {
 }
 
 async function loadCategories() {
-  const { data, error } = await sb.rpc('rpc_select_categories', { p_key: _getSecureKey() });
+  const { data, error } = await sb.rpc('rpc_select_categories');
   if (error) { console.error('加载分类失败:', error); categories = []; return categories; }
   categories = (data || []).map(r => toCamel(r, CAT_FIELD_MAP));
   return categories;
@@ -769,18 +769,18 @@ async function loadCategories() {
 
 async function saveCatToDB(data) {
   const row = toSnake(data, CAT_FIELD_MAP);
-  const { error } = await sb.rpc('rpc_upsert_category', { p_key: _getSecureKey(), p_row: row });
+  const { error } = await sb.rpc('rpc_upsert_category', { p_row: row });
   if (error) console.error('保存分类失败:', error);
 }
 
 async function deleteCatFromDB(id) {
-  const { error } = await sb.rpc('rpc_delete_category', { p_key: _getSecureKey(), p_id: id });
+  const { error } = await sb.rpc('rpc_delete_category', { p_id: id });
   if (error) console.error('删除分类失败:', error);
 }
 
 async function loadIconLibrary() {
   console.log('[图标库] 开始从云端加载...');
-  const { data, error } = await sb.rpc('rpc_select_icons', { p_key: _getSecureKey() });
+  const { data, error } = await sb.rpc('rpc_select_icons');
   if (error) { console.error('[图标库] 加载失败:', error); iconLibrary = []; return iconLibrary; }
   iconLibrary = data || [];
   console.log('[图标库] 加载成功, 共', iconLibrary.length, '个图标');
@@ -792,27 +792,27 @@ async function saveIconToDB(data) {
   // 只插入表里实际存在的字段
   const insertData = { id: data.id, name: data.name, data: data.data };
   // 先检查是否已存在，避免重复插入
-  const { data: existing, error: checkErr } = await sb.rpc('rpc_select_icon_by_id', { p_key: _getSecureKey(), p_id: data.id });
+  const { data: existing, error: checkErr } = await sb.rpc('rpc_select_icon_by_id', { p_id: data.id });
   if (checkErr) { console.error('[图标库] 检查重复失败:', checkErr); }
   if (existing && existing.length > 0) { console.log('[图标库] 图标已存在，跳过'); return; }
-  const { data: inserted, error } = await sb.rpc('rpc_insert_icon', { p_key: _getSecureKey(), p_id: data.id, p_name: data.name, p_data: data.data });
+  const { data: inserted, error } = await sb.rpc('rpc_insert_icon', { p_id: data.id, p_name: data.name, p_data: data.data });
   if (error) { console.error('[图标库] 插入失败:', error); }
   else { console.log('[图标库] 插入成功:', inserted); }
 }
 
 async function deleteIconFromDB(id) {
-  const { error } = await sb.rpc('rpc_delete_icon', { p_key: _getSecureKey(), p_id: id });
+  const { error } = await sb.rpc('rpc_delete_icon', { p_id: id });
   if (error) console.error('删除图标失败:', error);
 }
 
 async function saveToDB(data) {
   const row = toSnake(data, STORE_FIELD_MAP);
-  const { error } = await sb.rpc('rpc_upsert_store', { p_key: _getSecureKey(), p_row: row });
+  const { error } = await sb.rpc('rpc_upsert_store', { p_row: row });
   if (error) console.error('保存门店失败:', error);
 }
 
 async function deleteFromDB(id) {
-  const { error } = await sb.rpc('rpc_delete_store', { p_key: _getSecureKey(), p_id: id });
+  const { error } = await sb.rpc('rpc_delete_store', { p_id: id });
   if (error) console.error('删除门店失败:', error);
 }
 
