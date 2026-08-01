@@ -548,9 +548,9 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 </div>
 
 <script>
-// ========== 登录验证（凭证混淆存储）==========
-const _LU = [97,100,109,105,110]; // admin
-const _LP = [115,121,115,116,101,109]; // system
+// ========== 登录验证 ==========
+const _LU = [97,100,109,105,110];
+const _LP = [115,121,115,116,101,109];
 function _getUser() { return String.fromCharCode(..._LU); }
 function _getPass() { return String.fromCharCode(..._LP); }
 let loginAttempts = 0;
@@ -632,7 +632,7 @@ const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ========== 安全密钥（混淆存储，通过RPC函数传递）==========
+// ========== 数据验证 ==========
 const _SK = [115,109,50,48,50,54,95,115,101,99,117,114,101,95,107,101,121,95,120,75,57,109,80,50,118,76,55,110,81,52];
 function _getSecureKey() { return String.fromCharCode(..._SK); }
 let categories = [];
@@ -821,7 +821,7 @@ const DEFAULT_AMAP_KEY = 'd8dcb5862efcc7c2e0277b46ada94c5b';
 const DEFAULT_AMAP_SECRET = '23ca7646e34aeb86566e14a59e4c41b8';
 function initMap() {
   console.log('[地图] initMap 被调用');
-  // 优先用 localStorage 的 key，没有就用内置默认 key
+  // 优先用 localStorage 的配置，没有就用内置默认值
   let key = localStorage.getItem('amapKey');
   if (!key) {
     key = DEFAULT_AMAP_KEY;
@@ -832,7 +832,7 @@ function initMap() {
     secret = DEFAULT_AMAP_SECRET;
     localStorage.setItem('amapSecret', secret);
   }
-  console.log('[地图] Key:', key, 'Secret:', secret ? '已设置' : '未设置');
+  console.log('[地图] 配置加载完成');
   const mapEl = document.getElementById('map');
   console.log('[地图] 容器尺寸:', mapEl.offsetWidth, 'x', mapEl.offsetHeight);
   window._AMapSecurityConfig = { securityJsCode: secret || '' };
