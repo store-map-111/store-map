@@ -104,6 +104,23 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .settings-content { padding: 4px 0; }
 .settings-tip { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 13px; color: #666; line-height: 1.6; }
 .settings-tip a { color: #1677ff; }
+.settings-tabs { display: flex; border-bottom: 1px solid #e8e8e8; margin-bottom: 16px; }
+.settings-tab { flex: 1; text-align: center; padding: 10px 0; cursor: pointer; font-size: 14px; color: #666; border-bottom: 2px solid transparent; transition: all .2s; }
+.settings-tab.active { color: #1677ff; border-bottom-color: #1677ff; font-weight: 500; }
+.settings-panel { display: none; }
+.settings-panel.active { display: block; }
+.log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.log-table th { background: #fafafa; padding: 8px 6px; text-align: left; font-weight: 500; color: #666; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+.log-table td { padding: 7px 6px; border-bottom: 1px solid #f0f0f0; color: #333; vertical-align: top; }
+.log-table tr:hover td { background: #f5f5f5; }
+.log-action { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.log-action.login { background: #e6f7ff; color: #1677ff; }
+.log-action.logout { background: #fff7e6; color: #fa8c16; }
+.log-action.add { background: #f6ffed; color: #52c41a; }
+.log-action.edit { background: #f6ffed; color: #52c41a; }
+.log-action.delete { background: #fff1f0; color: #ff4d4f; }
+.log-container { max-height: 400px; overflow-y: auto; }
+.log-empty { text-align: center; padding: 40px; color: #bbb; font-size: 14px; }
 
 /* 空状态 */
 .empty-state { text-align: center; padding: 40px 20px; color: #bbb; }
@@ -466,30 +483,41 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 
 <!-- 设置弹窗 -->
 <div class="modal-overlay" id="settingsModal">
-  <div class="modal" style="width:480px">
+  <div class="modal" style="width:560px">
     <div class="modal-header">
-      <h2>⚙️ 地图设置</h2>
+      <h2>⚙️ 设置</h2>
       <button class="modal-close" onclick="closeModal('settingsModal')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="settings-tip">
-        💡 使用前需要先获取高德地图 Key（免费）：<br>
-        1. 访问 <a href="https://console.amap.com/dev/key/app" target="_blank">高德开放平台</a> 注册账号<br>
-        2. 创建应用 → 添加 Key → Web端(JS API)类型<br>
-        3. 将获取到的 Key 填入下方
+      <div class="settings-tabs">
+        <div class="settings-tab active" onclick="switchSettingsTab('map')">🗺️ 地图设置</div>
+        <div class="settings-tab" onclick="switchSettingsTab('log')">📋 操作日志</div>
       </div>
-      <div class="form-group">
-        <label class="form-label">高德地图 Key</label>
-        <input class="form-input" id="amapKey" placeholder="请输入您的高德地图 Key">
+      <div class="settings-panel active" id="panelMap">
+        <div class="settings-tip">
+          💡 使用前需要先获取高德地图 Key（免费）：<br>
+          1. 访问 <a href="https://console.amap.com/dev/key/app" target="_blank">高德开放平台</a> 注册账号<br>
+          2. 创建应用 → 添加 Key → Web端(JS API)类型<br>
+          3. 将获取到的 Key 填入下方
+        </div>
+        <div class="form-group">
+          <label class="form-label">高德地图 Key</label>
+          <input class="form-input" id="amapKey" placeholder="请输入您的高德地图 Key">
+        </div>
+        <div class="form-group">
+          <label class="form-label">安全密钥 (JSAPI Security Key)</label>
+          <input class="form-input" id="amapSecret" placeholder="请输入安全密钥">
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">安全密钥 (JSAPI Security Key)</label>
-        <input class="form-input" id="amapSecret" placeholder="请输入安全密钥">
+      <div class="settings-panel" id="panelLog">
+        <div class="log-container" id="logContainer">
+          <div class="log-empty">加载中...</div>
+        </div>
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" id="settingsFooter">
       <button class="btn" onclick="closeModal('settingsModal')">取消</button>
-      <button class="btn btn-primary" onclick="saveSettings()">保存并刷新</button>
+      <button class="btn btn-primary" id="settingsSaveBtn" onclick="saveSettings()">保存并刷新</button>
     </div>
   </div>
 </div>
@@ -634,12 +662,14 @@ async function doLogin() {
     localStorage.setItem('loginTime', Date.now().toString());
     const overlay = document.getElementById('loginOverlay');
     if (overlay) overlay.remove();
+    writeLog('登录', '登录成功');
     setTimeout(() => { initMap(); }, 300);
   }
 }
 
 sb.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
+    writeLog('登出', '用户登出');
     createLoginOverlay();
   }
 });
@@ -787,19 +817,22 @@ async function loadCategories() {
     groups[p].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
     groups[p].forEach((c, i) => { if (c.sortOrder == null) { c.sortOrder = i; toSave.push(c); } });
   }
-  for (const c of toSave) { await saveCatToDB(c); }
+  for (const c of toSave) { await saveCatToDB(c, true); }
   return categories;
 }
 
-async function saveCatToDB(data) {
+async function saveCatToDB(data, silent) {
   const row = toSnake(data, CAT_FIELD_MAP);
   const { error } = await sb.rpc('rpc_upsert_category', { p_row: row });
   if (error) console.error('保存分类失败:', error);
+  else if (!silent) writeLog('新增分类', data.name || '');
 }
 
 async function deleteCatFromDB(id) {
+  const cat = categories.find(c => c.id === id);
   const { error } = await sb.rpc('rpc_delete_category', { p_id: id });
   if (error) console.error('删除分类失败:', error);
+  else writeLog('删除分类', cat ? cat.name : id);
 }
 
 async function loadIconLibrary() {
@@ -827,6 +860,7 @@ async function saveIconToDB(data) {
 async function deleteIconFromDB(id) {
   const { error } = await sb.rpc('rpc_delete_icon', { p_id: id });
   if (error) console.error('删除图标失败:', error);
+  else writeLog('删除图标', id);
 }
 
 async function saveToDB(data) {
@@ -838,6 +872,7 @@ async function saveToDB(data) {
 async function deleteFromDB(id) {
   const { error } = await sb.rpc('rpc_delete_store', { p_id: id });
   if (error) console.error('删除门店失败:', error);
+  else writeLog('删除门店', id);
 }
 
 // ========== 地图初始化 ==========
@@ -1136,6 +1171,7 @@ async function saveStore() {
   };
 
   await saveToDB(data);
+  writeLog(editingId ? '编辑门店' : '新增门店', name);
   markDirty();
   const existIdx = storeData.findIndex(s => s.id === data.id);
   if (existIdx >= 0) { storeData[existIdx] = data; if (visibleStores.has(data.id)) { removeMarker(data.id); addMarker(data); } }
@@ -1798,7 +1834,7 @@ async function reorderRootCats(dragId, targetId) {
   for (let i = 0; i < rootCats.length; i++) rootCats[i].sortOrder = i;
   markDirty();
   updateSidebar();
-  rootCats.forEach(c => saveCatToDB(c));
+  rootCats.forEach(c => saveCatToDB(c, true));
 }
 
 async function reorderSubCats(dragId, targetId, parentId) {
@@ -1811,8 +1847,8 @@ async function reorderSubCats(dragId, targetId, parentId) {
   targetCat.sortOrder = tmp;
   markDirty();
   updateSidebar();
-  saveCatToDB(dragCat);
-  saveCatToDB(targetCat);
+  saveCatToDB(dragCat, true);
+  saveCatToDB(targetCat, true);
 }
 
 async function moveStoreToCategory(storeId, categoryId) {
@@ -1978,6 +2014,7 @@ function exportData() {
   a.click();
   URL.revokeObjectURL(url);
   showToast(`已导出 ${storeData.length} 家门店数据`, 'success');
+  writeLog('导出备份', `${storeData.length}家门店、${categories.length}个分类`);
 }
 
 function exportExcel() {
@@ -2014,6 +2051,7 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, ws, '门店信息');
   XLSX.writeFile(wb, `门店信息_${new Date().toISOString().slice(0,10)}.xlsx`);
   showToast(`已导出 ${rows.length} 家门店到Excel`, 'success');
+  writeLog('导出Excel', `${rows.length}家门店`);
 }
 
 async function importData(event) {
@@ -2036,7 +2074,7 @@ async function importData(event) {
       if (item.id && item.data) { await saveIconToDB(item); iconCount++; }
     }
     for (const item of cats) {
-      if (item.id && item.name) { await saveCatToDB(item); catCount++; }
+      if (item.id && item.name) { await saveCatToDB(item, true); catCount++; }
     }
     for (const item of stores) {
       if (item.id && item.name && item.lng && item.lat) { await saveToDB(item); storeCount++; }
@@ -2053,6 +2091,7 @@ async function importData(event) {
     refreshMarkers();
     updateSidebar();
     showToast(`成功导入 ${storeCount} 家门店、${catCount} 个分类、${iconCount} 个图标`, 'success');
+    writeLog('导入恢复', `${storeCount}家门店、${catCount}个分类、${iconCount}个图标`);
   } catch (e) {
     showToast('导入失败：文件格式不正确', 'error');
   }
@@ -2063,7 +2102,24 @@ async function importData(event) {
 function showSettings() {
   document.getElementById('amapKey').value = localStorage.getItem('amapKey') || DEFAULT_AMAP_KEY;
   document.getElementById('amapSecret').value = localStorage.getItem('amapSecret') || DEFAULT_AMAP_SECRET;
+  switchSettingsTab('map');
   openModal('settingsModal');
+}
+
+function switchSettingsTab(tab) {
+  document.querySelectorAll('.settings-tab').forEach((el, i) => {
+    el.classList.toggle('active', (tab === 'map' && i === 0) || (tab === 'log' && i === 1));
+  });
+  document.getElementById('panelMap').classList.toggle('active', tab === 'map');
+  document.getElementById('panelLog').classList.toggle('active', tab === 'log');
+  const saveBtn = document.getElementById('settingsSaveBtn');
+  const footer = document.getElementById('settingsFooter');
+  if (tab === 'log') {
+    saveBtn.style.display = 'none';
+    loadLogs();
+  } else {
+    saveBtn.style.display = '';
+  }
 }
 
 function saveSettings() {
@@ -2072,9 +2128,40 @@ function saveSettings() {
   if (!key) { showToast('请输入高德地图 Key', 'error'); return; }
   localStorage.setItem('amapKey', key);
   localStorage.setItem('amapSecret', secret);
+  writeLog('修改设置', '更新高德地图Key');
   closeModal('settingsModal');
   showToast('设置已保存，正在刷新...', 'success');
   setTimeout(() => location.reload(), 800);
+}
+
+// ========== 操作日志 ==========
+function writeLog(action, detail) {
+  sb.rpc('rpc_insert_log', { p_action: action, p_detail: detail || '' }).then(({ error }) => {
+    if (error) console.warn('[日志] 写入失败:', error.message);
+  });
+}
+
+async function loadLogs() {
+  const container = document.getElementById('logContainer');
+  container.innerHTML = '<div class="log-empty">加载中...</div>';
+  const { data, error } = await sb.rpc('rpc_select_logs');
+  if (error) { container.innerHTML = '<div class="log-empty">加载失败</div>'; return; }
+  if (!data || data.length === 0) { container.innerHTML = '<div class="log-empty">暂无日志</div>'; return; }
+  const actionClass = (a) => {
+    if (a.includes('登录')) return 'login';
+    if (a.includes('登出')) return 'logout';
+    if (a.includes('删除')) return 'delete';
+    return 'edit';
+  };
+  let html = '<table class="log-table"><thead><tr><th>时间</th><th>用户</th><th>操作</th><th>详情</th></tr></thead><tbody>';
+  data.forEach(r => {
+    const time = new Date(r.created_at).toLocaleString('zh-CN', { hour12: false });
+    const email = (r.user_email || '').split('@')[0];
+    const cls = actionClass(r.action);
+    html += `<tr><td style="white-space:nowrap">${time}</td><td>${email}</td><td><span class="log-action ${cls}">${r.action}</span></td><td>${r.detail || ''}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
 }
 
 // ========== 弹窗/工具 ==========
