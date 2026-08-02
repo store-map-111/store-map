@@ -878,6 +878,8 @@ function initMap() {
     } catch(e) {
       console.error('[地图] 地图创建失败:', e);
     }
+    // 确保 session 已恢复再加载数据（手机端 session 恢复较慢）
+    sb.auth.getSession().then(() => {
     loadStores().then(stores => {
       return loadCategories();
     }).then(() => {
@@ -886,6 +888,7 @@ function initMap() {
       // 初始化品牌颜色索引
       brandColorIdx = Object.keys(brandColors).length;
       updateSidebar();
+    });
     });
     setTimeout(() => {
       const tip = document.getElementById('mapTip');
