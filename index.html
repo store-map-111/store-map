@@ -767,7 +767,14 @@ async function loadStores() {
   console.log('[迁移] 开始检查...');
   await migrateFromIndexedDB();
   console.log('[迁移] 完成，开始从云端加载...');
-  const { data, error } = await sb.rpc('rpc_select_stores');
+  let { data, error } = await sb.rpc('rpc_select_stores');
+  // 手机端 session 恢复慢，失败后重试一次
+  if (error) {
+    console.log('[云端] 首次加载失败，1秒后重试...');
+    await new Promise(r => setTimeout(r, 1000));
+    const retry = await sb.rpc('rpc_select_stores');
+    data = retry.data; error = retry.error;
+  }
   console.log('[云端] 加载结果:', data ? data.length + '条' : 'null', error || '');
   if (error) { console.error('加载门店失败:', error); storeData = []; return storeData; }
   storeData = (data || []).map(r => toCamel(r, STORE_FIELD_MAP));
