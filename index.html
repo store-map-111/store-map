@@ -557,7 +557,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 const SUPABASE_URL = 'https://xqvytkfptihdtijxhorv.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhxdnl0a2ZwdGloZHRpanhob3J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Nzg5NDcsImV4cCI6MjEwMTA1NDk0N30.apThtgq3jYmzc5WDcUeb63lLDNKGCO5hTskWNPb0wlA';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { storage: localStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+  auth: { storage: sessionStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
 });
 
 let loginAttempts = 0;
@@ -1310,9 +1310,9 @@ function renderCatSelectOptions() {
   const dd = document.getElementById('catSelectDropdown');
   const currentVal = document.getElementById('storeCategoryId').value;
   let html = `<div class="cat-select-option ${!currentVal?'selected':''}" onclick="selectCategory('','未分类')">未分类</div>`;
-  categories.filter(c => !c.parentId).forEach(c => {
+  categories.filter(c => !c.parentId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).forEach(c => {
     html += `<div class="cat-select-option ${currentVal===c.id?'selected':''}" onclick="selectCategory('${c.id}','${c.name}')">${c.name}</div>`;
-    categories.filter(sc => sc.parentId === c.id).forEach(sc => {
+    categories.filter(sc => sc.parentId === c.id).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).forEach(sc => {
       html += `<div class="cat-select-option sub ${currentVal===sc.id?'selected':''}" onclick="selectCategory('${sc.id}','${c.name} / ${sc.name}')">${sc.name}</div>`;
     });
   });
