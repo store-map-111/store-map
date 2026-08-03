@@ -942,9 +942,11 @@ async function saveToDB(data) {
 }
 
 async function deleteFromDB(id) {
+  const store = storeData.find(s => s.id === id);
+  const displayName = store ? store.name : id;
   const { error } = await sb.rpc('rpc_delete_store', { p_id: id });
   if (error) console.error('删除门店失败:', error);
-  else writeLog('删除门店', id);
+  else writeLog('删除门店', displayName);
 }
 
 // ========== 多房东 ==========
@@ -1257,6 +1259,7 @@ function createMarkerIcon(color, style, zoom, customIcon) {
 
 function addMarker(store) {
   if (!map) return;
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const zoom = map.getZoom();
   const { icon, offset } = createMarkerIcon(store.color || '#1677ff', store.iconStyle || 'pin', zoom, store.customIcon);
   const isMulti = (store.landlordCount || 0) > 0;
@@ -1268,7 +1271,7 @@ function addMarker(store) {
     offset: offset
   };
   
-  if (!isMulti) {
+  if (!isMulti && !isTouchDevice) {
     // 单房东：使用 title 属性
     markerOpts.title = `${store.name}\n品牌：${store.brand||'-'}\n类型：${store.type||'-'}${store.subType&&store.type==='直营店'?' · '+store.subType:''}\n面积：${store.area||'-'}㎡\n不含税租金：${store.rent?'¥'+Number(store.rent).toLocaleString()+'/年':'-'}\n含税租金：${store.rentTax?'¥'+Number(store.rentTax).toLocaleString()+'/年':'-'}\n单价：${(()=>{const p=calcUnitPrice(store);return p?p+'元/㎡/月':'-';})()}\n租期：${store.leaseStart||'-'} 至 ${store.leaseEnd||'-'}\n联系人：${store.contactName||'-'}\n联系电话：${store.contactPhone||'-'}\n地址：${store.address||'未填写'}\n备注：${store.remark||'-'}`;
   }
@@ -1286,8 +1289,8 @@ function addMarker(store) {
     });
   }
   
-  // 多房东：使用 InfoWindow 显示表格
-  if (isMulti) {
+  // 多房东：使用 InfoWindow 显示表格（触摸设备不启用悬浮）
+  if (isMulti && !isTouchDevice) {
     const unitPrice = calcUnitPrice(store);
     let content = `<div style="padding:8px;min-width:280px;font-size:12px;">`;
     content += `<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">${store.name}</div>`;
