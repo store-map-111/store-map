@@ -1259,7 +1259,7 @@ function createMarkerIcon(color, style, zoom, customIcon) {
 
 function addMarker(store) {
   if (!map) return;
-  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const isTouchDevice = !window.matchMedia('(hover: hover)').matches;
   const zoom = map.getZoom();
   const { icon, offset } = createMarkerIcon(store.color || '#1677ff', store.iconStyle || 'pin', zoom, store.customIcon);
   const isMulti = (store.landlordCount || 0) > 0;
@@ -2450,7 +2450,9 @@ function saveSettings() {
 // ========== 操作日志 ==========
 function writeLog(action, detail) {
   sb.rpc('rpc_insert_log', { p_action: action, p_detail: detail || '' }).then(({ error }) => {
-    if (error) console.warn('[日志] 写入失败:', error.message);
+    if (error) console.error('[日志] 写入失败:', action, detail, JSON.stringify(error));
+  }).catch(e => {
+    console.error('[日志] 写入异常:', action, e);
   });
 }
 
