@@ -2334,44 +2334,100 @@ async function exportData() {
   writeLog('导出备份', `${storeData.length}家门店、${categories.length}个分类`);
 }
 
-function exportExcel() {
+function buildStoreRow(s, catName) {
+  const unitPrice = calcUnitPrice(s);
+  return {
+    '门店名称': s.name || '',
+    '品牌/连锁': s.brand || '',
+    '地址': s.address || '',
+    '联系人': s.contactName || '',
+    '联系电话': s.contactPhone || '',
+    '面积(㎡)': s.area || '',
+    '不含税年租金(元)': s.rent ? Number(s.rent) : '',
+    '含税年租金(元)': s.rentTax ? Number(s.rentTax) : '',
+    '单价(元/㎡/月)': unitPrice ? Number(unitPrice) : '',
+    '门店类型': s.type || '',
+    '二级类型': (s.subType && s.type === '直营店') ? s.subType : '',
+    '所属分类': catName,
+    '租期开始': s.leaseStart || '',
+    '租期结束': s.leaseEnd || '',
+    '房东序号': 1,
+    '备注': s.remark || '',
+    '创建时间': s.createTime ? new Date(s.createTime).toLocaleString('zh-CN') : ''
+  };
+}
+
+async function exportExcel() {
   if (storeData.length === 0) { showToast('暂无门店数据可导出', 'error'); return; }
-  const rows = storeData.map(s => {
+  // 按侧边栏顺序排序：分类层级 + 门店名自然排序
+  const rootCats = categories.filter(c => !c.parentId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const orderedStores = [];
+  rootCats.forEach(cat => {
+    const subCats = categories.filter(c => c.parentId === cat.id).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    subCats.forEach(sc => {
+      const scStores = storeData.filter(s => s.categoryId === sc.id).sort((a, b) => naturalSort(a.name, b.name));
+      scStores.forEach(s => orderedStores.push(s));
+    });
+    const catStores = storeData.filter(s => s.categoryId === cat.id).sort((a, b) => naturalSort(a.name, b.name));
+    catStores.forEach(s => orderedStores.push(s));
+  });
+  const uncatStores = storeData.filter(s => !s.categoryId || !categories.find(c => c.id === s.categoryId)).sort((a, b) => naturalSort(a.name, b.name));
+  uncatStores.forEach(s => orderedStores.push(s));
+
+  const rows = [];
+  for (const s of orderedStores) {
     const cat = categories.find(c => c.id === s.categoryId);
     const parentCat = cat && cat.parentId ? categories.find(c => c.id === cat.parentId) : null;
     const catName = parentCat ? parentCat.name + ' > ' + cat.name : (cat ? cat.name : '未分类');
-    const unitPrice = calcUnitPrice(s);
     const isMulti = (s.landlordCount || 0) > 0;
-    return {
-      '门店名称': s.name || '',
-      '品牌/连锁': s.brand || '',
-      '地址': s.address || '',
-      '联系人': s.contactName || '',
-      '联系电话': s.contactPhone || '',
-      '面积(㎡)': s.area || '',
-      '不含税年租金(元)': s.rent ? Number(s.rent) : '',
-      '含税年租金(元)': s.rentTax ? Number(s.rentTax) : '',
-      '单价(元/㎡/月)': unitPrice ? Number(unitPrice) : '',
-      '门店类型': s.type || '',
-      '二级类型': (s.subType && s.type === '直营店') ? s.subType : '',
-      '所属分类': catName,
-      '租期开始': s.leaseStart || '',
-      '租期结束': s.leaseEnd || '',
-      '房东数': isMulti ? s.landlordCount : 1,
-      '备注': s.remark || '',
-      '创建时间': s.createTime ? new Date(s.createTime).toLocaleString('zh-CN') : ''
-    };
-  });
+
+    if (isMulti) {
+      // 多房东：每个房东一行
+      const landlords = await loadLandlords(s.id);
+      if (landlords.length > 0) {
+        // 单价用门店总租金÷门店总面积，所有房东行一致
+        const totalRent = s.rent ? Number(s.rent) : (s.rentTax ? Number(s.rentTax) : 0);
+        const storeUnitPrice = s.area && totalRent > 0 ? (totalRent / 12 / Number(s.area)).toFixed(2) : '';
+        landlords.forEach((l, idx) => {
+          rows.push({
+            '门店名称': s.name || '',
+            '品牌/连锁': s.brand || '',
+            '地址': s.address || '',
+            '联系人': l.landlord_name || '',
+            '联系电话': l.phone || '',
+            '面积(㎡)': l.area || '',
+            '不含税年租金(元)': l.rent ? Number(l.rent) : '',
+            '含税年租金(元)': l.rent_tax ? Number(l.rent_tax) : '',
+            '单价(元/㎡/月)': storeUnitPrice ? Number(storeUnitPrice) : '',
+            '门店类型': s.type || '',
+            '二级类型': (s.subType && s.type === '直营店') ? s.subType : '',
+            '所属分类': catName,
+            '租期开始': l.lease_start || '',
+            '租期结束': l.lease_end || '',
+            '房东序号': idx + 1,
+            '备注': s.remark || '',
+            '创建时间': s.createTime ? new Date(s.createTime).toLocaleString('zh-CN') : ''
+          });
+        });
+      } else {
+        // 多房东但无明细，用汇总数据
+        rows.push(buildStoreRow(s, catName));
+      }
+    } else {
+      // 单房东：一行
+      rows.push(buildStoreRow(s, catName));
+    }
+  }
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [
-    {wch:18},{wch:15},{wch:30},{wch:8},{wch:14},{wch:10},{wch:16},{wch:16},{wch:14},
+    {wch:18},{wch:15},{wch:30},{wch:10},{wch:14},{wch:10},{wch:16},{wch:16},{wch:14},
     {wch:12},{wch:12},{wch:20},{wch:12},{wch:12},{wch:8},{wch:20},{wch:22}
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '门店信息');
   XLSX.writeFile(wb, `门店信息_${new Date().toISOString().slice(0,10)}.xlsx`);
-  showToast(`已导出 ${rows.length} 家门店到Excel`, 'success');
-  writeLog('导出Excel', `${rows.length}家门店`);
+  showToast(`已导出 ${rows.length} 行数据（${orderedStores.length}家门店）到Excel`, 'success');
+  writeLog('导出Excel', `${orderedStores.length}家门店、${rows.length}行`);
 }
 
 async function importData(event) {
