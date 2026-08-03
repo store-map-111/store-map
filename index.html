@@ -365,8 +365,8 @@ textarea.form-input { resize: vertical; min-height: 60px; }
       </div>
       <div class="form-group">
         <label class="form-label">品牌/连锁名称</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input class="form-input" id="storeBrand" placeholder="如：瑞幸咖啡、星巴克、蜜雪冰城" style="flex:1" oninput="updateBrandColorPreview()">
+        <div class="brand-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input class="form-input" id="storeBrand" placeholder="如：瑞幸咖啡、星巴克、蜜雪冰城" style="flex:1;min-width:140px;" oninput="updateBrandColorPreview()">
           <div id="brandColorPreview" style="width:28px;height:28px;border-radius:6px;border:2px solid #d9d9d9;flex-shrink:0;display:none;"></div>
           <div id="brandColorSwatches" style="display:flex;gap:4px;">
             <span style="width:22px;height:22px;border-radius:4px;background:#1677ff;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#1677ff')"></span>
@@ -1452,12 +1452,19 @@ async function showDetail(store) {
     const landlords = await loadLandlords(store.id);
     if (landlords.length > 0) {
       html += '<div style="margin-top:12px"><div style="font-size:13px;font-weight:500;color:#333;margin-bottom:8px;">租赁明细</div>';
-      html += '<table class="landlord-table"><thead><tr><th style="width:100px;text-align:center;">出租人</th><th style="width:80px;text-align:center;">面积</th><th style="width:100px;text-align:center;">不含税租金</th><th style="width:100px;text-align:center;">含税租金</th><th style="width:180px;text-align:center;">租期</th><th style="width:110px;text-align:center;">电话</th></tr></thead><tbody>';
-      landlords.forEach(l => {
+      landlords.forEach((l, i) => {
         const lease = (l.lease_start && l.lease_end) ? l.lease_start + ' 至 ' + l.lease_end : '-';
-        html += `<tr><td style="text-align:center;">${l.landlord_name||'-'}</td><td style="text-align:center;">${l.area?l.area+'㎡':'-'}</td><td style="text-align:center;">${l.rent?'¥'+Number(l.rent).toLocaleString():'-'}</td><td style="text-align:center;">${l.rent_tax?'¥'+Number(l.rent_tax).toLocaleString():'-'}</td><td style="text-align:center;white-space:nowrap">${lease}</td><td style="text-align:center;">${l.phone||'-'}</td></tr>`;
+        html += `<div style="background:#f7f9fc;border:1px solid #e8eef8;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;">
+          <div style="font-weight:600;color:#1a1a1a;margin-bottom:6px;">${i+1}. ${l.landlord_name||'-'}　<span style="font-weight:400;color:#1677ff">${l.phone||''}</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px 16px;color:#555;">
+            <span>面积：<b style="color:#1a1a1a">${l.area?l.area+'㎡':'-'}</b></span>
+            <span>不含税：<b style="color:#1a1a1a">${l.rent?'¥'+Number(l.rent).toLocaleString():'-'}</b></span>
+            <span>含税：<b style="color:#1a1a1a">${l.rent_tax?'¥'+Number(l.rent_tax).toLocaleString():'-'}</b></span>
+          </div>
+          <div style="margin-top:4px;color:#555;">租期：<b style="color:#1a1a1a">${lease}</b></div>
+        </div>`;
       });
-      html += '</tbody></table></div>';
+      html += '</div>';
     }
   } else {
     const leaseText = (store.leaseStart && store.leaseEnd) ? store.leaseStart + ' 至 ' + store.leaseEnd : '-';
