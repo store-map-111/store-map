@@ -2688,8 +2688,18 @@ window.onload = () => {
 
 // ========== PWA Service Worker ==========
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(() => {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
     console.log('[PWA] Service Worker 注册成功');
+    // 检测新版本，提示用户刷新
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          showToast('检测到新版本，点击刷新获取', 'info');
+          document.addEventListener('click', () => location.reload(), { once: true });
+        }
+      });
+    });
   }).catch(err => {
     console.log('[PWA] Service Worker 注册失败:', err);
   });
