@@ -74,7 +74,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft Ya
 .modal-overlay.show { opacity: 1; visibility: visible; }
 
 /* 弹窗 */
-.modal { background: #fff; border-radius: 12px; width: 520px; max-height: 85vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.15); transform: scale(.9); transition: transform .3s; }
+.modal { background: #fff; border-radius: 12px; width: 700px; max-height: 85vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.15); transform: scale(.9); transition: transform .3s; }
 .modal-overlay.show .modal { transform: scale(1); }
 .modal-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; }
 .modal-header h2 { font-size: 17px; color: #1a1a1a; }
@@ -121,6 +121,29 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .log-action.delete { background: #fff1f0; color: #ff4d4f; }
 .log-container { max-height: 400px; overflow-y: auto; }
 .log-empty { text-align: center; padding: 40px; color: #bbb; font-size: 14px; }
+
+/* 多房东 */
+.landlord-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 0; margin-bottom: 8px; border-bottom: 1px dashed #e8e8e8; }
+.landlord-toggle label { font-size: 14px; color: #333; cursor: pointer; user-select: none; }
+.toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 24px; cursor: pointer; transition: .3s; }
+.toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
+.toggle-switch input:checked + .toggle-slider { background: #1677ff; }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+.landlord-section { margin-top: 12px; border: 1px solid #e8e8e8; border-radius: 8px; padding: 16px; background: #fafafa; overflow-x: auto; }
+.landlord-section-title { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+.landlord-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border-radius: 6px; overflow: hidden; border: 1px solid #e8e8e8; }
+.landlord-table th { background: #f0f5ff; padding: 10px 6px; text-align: center; font-weight: 500; color: #666; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+.landlord-table td { padding: 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+.landlord-table input { width: 100%; min-width: 80px; padding: 6px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
+#landlordTable { table-layout: fixed; width: 1030px; }
+.landlord-table input:focus { border-color: #1677ff; }
+.landlord-table .btn-remove-row { background: none; border: none; color: #ff4d4f; cursor: pointer; font-size: 16px; padding: 2px 6px; }
+.landlord-table .btn-remove-row:hover { color: #cf1322; }
+.btn-add-landlord { margin-top: 8px; padding: 6px 16px; background: #fff; border: 1px dashed #1677ff; color: #1677ff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.btn-add-landlord:hover { background: #f0f5ff; }
+.form-input[readonly] { background: #f5f5f5; color: #999; cursor: default; }
 
 /* 空状态 */
 .empty-state { text-align: center; padding: 40px 20px; color: #bbb; }
@@ -265,7 +288,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   .sidebar.collapsed { width: 300px !important; transform: translateX(-100%); }
   .map-container { width: 100% !important; }
   .map-search-box { width: 200px; right: 8px; top: 8px; }
-  .modal { width: 95vw !important; max-width: 480px; margin: 10px; }
+  .modal { width: 95vw !important; max-width: 660px; margin: 10px; }
   .form-row { flex-direction: column; gap: 0; }
   .stats-bar { padding: 8px 10px; }
   .toast { top: 56px; font-size: 13px; padding: 10px 16px; }
@@ -363,6 +386,16 @@ textarea.form-input { resize: vertical; min-height: 60px; }
       </div>
       <div class="form-row">
         <div class="form-group">
+          <label class="form-label">联系人</label>
+          <input class="form-input" id="storeContactName" placeholder="联系人姓名">
+        </div>
+        <div class="form-group">
+          <label class="form-label">联系电话</label>
+          <input class="form-input" id="storeContactPhone" placeholder="联系电话">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
           <label class="form-label">面积(㎡)</label>
           <input class="form-input" id="storeArea" type="number" placeholder="如：120">
         </div>
@@ -375,7 +408,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
           <input class="form-input" id="storeRentTax" type="number" placeholder="如：254400">
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row" id="leaseRow">
         <div class="form-group">
           <label class="form-label">租期开始</label>
           <input class="form-input" id="storeLeaseStart" type="date">
@@ -383,6 +416,34 @@ textarea.form-input { resize: vertical; min-height: 60px; }
         <div class="form-group">
           <label class="form-label">租期结束</label>
           <input class="form-input" id="storeLeaseEnd" type="date">
+        </div>
+      </div>
+      <div class="landlord-toggle">
+        <label class="toggle-switch">
+          <input type="checkbox" id="multiLandlordToggle" onchange="toggleLandlordMode()">
+          <span class="toggle-slider"></span>
+        </label>
+        <label for="multiLandlordToggle">多房东（按合同分别录入）</label>
+      </div>
+      <div class="landlord-section" id="landlordSection" style="display:none">
+        <div class="landlord-section-title">
+          <span> 租赁明细</span>
+          <button class="btn-add-landlord" onclick="addLandlordRow()">+ 添加出租人</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="landlord-table" id="landlordTable">
+            <thead><tr>
+              <th style="width:140px">出租人</th>
+              <th style="width:100px">面积 (㎡)</th>
+              <th style="width:140px">不含税租金 (元)</th>
+              <th style="width:140px">含税租金 (元)</th>
+              <th style="width:150px">租期开始</th>
+              <th style="width:150px">租期结束</th>
+              <th style="width:160px">联系电话</th>
+              <th style="width:50px"></th>
+            </tr></thead>
+            <tbody id="landlordBody"></tbody>
+          </table>
         </div>
       </div>
       <div class="form-row">
@@ -680,6 +741,7 @@ let markers = [];
 let storeData = [];
 let currentClickLngLat = null;
 let editingId = null;
+let currentLandlords = [];
 let categories = [];
 let iconLibrary = [];
 let collapsedCats = {};
@@ -694,7 +756,8 @@ let brandColorIdx = 0;
 const STORE_FIELD_MAP = {
   brandColor:'brand_color', rentTax:'rent_tax', leaseStart:'lease_start',
   leaseEnd:'lease_end', subType:'sub_type', iconStyle:'icon_style',
-  customIcon:'custom_icon', categoryId:'category_id', createTime:'create_time', updateTime:'update_time'
+  customIcon:'custom_icon', categoryId:'category_id', createTime:'create_time', updateTime:'update_time',
+  contactName:'contact_name', contactPhone:'contact_phone', landlordCount:'landlord_count'
 };
 const CAT_FIELD_MAP = { parentId:'parent_id', sortOrder:'sort_order', createTime:'create_time' };
 
@@ -798,9 +861,17 @@ async function loadStores() {
   await migrateFromIndexedDB();
   console.log('[迁移] 完成，开始从云端加载...');
   const { data, error } = await sb.rpc('rpc_select_stores');
-  console.log('[云端] 加载结果:', data ? data.length + '条' : 'null', error || '');
+  const storeList = typeof data === 'string' ? JSON.parse(data || '[]') : (data || []);
+  console.log('[云端] 加载结果:', storeList ? storeList.length + '条' : 'null', error || '');
   if (error) { console.error('加载门店失败:', error); storeData = []; return storeData; }
-  storeData = (data || []).map(r => toCamel(r, STORE_FIELD_MAP));
+  storeData = storeList.map(r => toCamel(r, STORE_FIELD_MAP));
+  // 加载多房东门店的明细
+  for (const s of storeData) {
+    if ((s.landlordCount || 0) > 0) {
+      const { data: landlords, error: lErr } = await sb.rpc('rpc_select_landlords', { p_store_id: s.id });
+      if (!lErr && landlords) s.landlords = landlords;
+    }
+  }
   console.log('[数据] 门店数量:', storeData.length);
   return storeData;
 }
@@ -865,14 +936,105 @@ async function deleteIconFromDB(id) {
 
 async function saveToDB(data) {
   const row = toSnake(data, STORE_FIELD_MAP);
-  const { error } = await sb.rpc('rpc_upsert_store', { p_row: row });
+  const { data: resultId, error } = await sb.rpc('rpc_upsert_store', { p_row: row });
   if (error) console.error('保存门店失败:', error);
+  return resultId;
 }
 
 async function deleteFromDB(id) {
   const { error } = await sb.rpc('rpc_delete_store', { p_id: id });
   if (error) console.error('删除门店失败:', error);
   else writeLog('删除门店', id);
+}
+
+// ========== 多房东 ==========
+function toggleLandlordMode() {
+  const isMulti = document.getElementById('multiLandlordToggle').checked;
+  document.getElementById('landlordSection').style.display = isMulti ? 'block' : 'none';
+  document.getElementById('leaseRow').style.display = isMulti ? 'none' : '';
+  const areaEl = document.getElementById('storeArea');
+  const rentEl = document.getElementById('storeRent');
+  const rentTaxEl = document.getElementById('storeRentTax');
+  if (isMulti) {
+    areaEl.readOnly = true; areaEl.placeholder = '自动汇总';
+    rentEl.readOnly = true; rentEl.placeholder = '自动汇总';
+    rentTaxEl.readOnly = true; rentTaxEl.placeholder = '自动汇总';
+    if (currentLandlords.length === 0) addLandlordRow();
+  } else {
+    areaEl.readOnly = false; areaEl.placeholder = '如：120';
+    rentEl.readOnly = false; rentEl.placeholder = '如：240000';
+    rentTaxEl.readOnly = false; rentTaxEl.placeholder = '如：254400';
+  }
+}
+
+function addLandlordRow(data) {
+  const d = data || {};
+  const tbody = document.getElementById('landlordBody');
+  const idx = tbody.children.length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input placeholder="出租人" value="${d.landlordName||''}" oninput="onLandlordChange()"></td>
+    <td><input type="number" placeholder="面积" value="${d.area||''}" oninput="onLandlordChange()"></td>
+    <td><input type="number" placeholder="不含税" value="${d.rent||''}" oninput="onLandlordChange()"></td>
+    <td><input type="number" placeholder="含税" value="${d.rentTax||''}" oninput="onLandlordChange()"></td>
+    <td><input type="date" value="${d.leaseStart||''}" oninput="onLandlordChange()"></td>
+    <td><input type="date" value="${d.leaseEnd||''}" oninput="onLandlordChange()"></td>
+    <td><input placeholder="电话" value="${d.phone||''}" oninput="onLandlordChange()"></td>
+    <td><button class="btn-remove-row" onclick="removeLandlordRow(this)" title="删除">✕</button></td>`;
+  tbody.appendChild(tr);
+  if (!data) onLandlordChange();
+}
+
+function removeLandlordRow(btn) {
+  btn.closest('tr').remove();
+  onLandlordChange();
+}
+
+function onLandlordChange() {
+  const rows = document.getElementById('landlordBody').children;
+  let totalArea = 0, totalRent = 0, totalRentTax = 0;
+  currentLandlords = [];
+  for (const tr of rows) {
+    const inputs = tr.querySelectorAll('input');
+    const row = {
+      landlordName: inputs[0].value,
+      area: inputs[1].value,
+      rent: inputs[2].value,
+      rentTax: inputs[3].value,
+      leaseStart: inputs[4].value,
+      leaseEnd: inputs[5].value,
+      phone: inputs[6].value
+    };
+    currentLandlords.push(row);
+    totalArea += parseFloat(row.area) || 0;
+    totalRent += parseFloat(row.rent) || 0;
+    totalRentTax += parseFloat(row.rentTax) || 0;
+  }
+  document.getElementById('storeArea').value = totalArea || '';
+  document.getElementById('storeRent').value = totalRent || '';
+  document.getElementById('storeRentTax').value = totalRentTax || '';
+}
+
+async function saveLandlords(storeId) {
+  if (currentLandlords.length === 0) return;
+  const rows = currentLandlords.map((r, i) => ({
+    landlord_name: r.landlordName || '',
+    area: parseFloat(r.area) || 0,
+    rent: parseFloat(r.rent) || 0,
+    rent_tax: parseFloat(r.rentTax) || 0,
+    lease_start: r.leaseStart || null,
+    lease_end: r.leaseEnd || null,
+    phone: r.phone || '',
+    sort_order: i
+  }));
+  const { error } = await sb.rpc('rpc_upsert_landlords', { p_store_id: storeId, p_rows: JSON.stringify(rows) });
+  if (error) console.error('[房东] 保存失败:', error);
+}
+
+async function loadLandlords(storeId) {
+  const { data, error } = await sb.rpc('rpc_select_landlords', { p_store_id: storeId });
+  if (error) { console.error('[房东] 加载失败:', error); return []; }
+  return data || [];
 }
 
 // ========== 地图初始化 ==========
@@ -1097,22 +1259,78 @@ function addMarker(store) {
   if (!map) return;
   const zoom = map.getZoom();
   const { icon, offset } = createMarkerIcon(store.color || '#1677ff', store.iconStyle || 'pin', zoom, store.customIcon);
+  const isMulti = (store.landlordCount || 0) > 0;
+  
+  // 单房东使用 title，多房东使用 InfoWindow
   const markerOpts = {
     position: [store.lng, store.lat],
-    title: `${store.name}\n品牌：${store.brand||'-'}\n类型：${store.type||'-'}${store.subType&&store.type==='直营店'?' · '+store.subType:''}\n面积：${store.area||'-'}㎡\n不含税租金：${store.rent?'¥'+Number(store.rent).toLocaleString()+'/年':'-'}\n含税租金：${store.rentTax?'¥'+Number(store.rentTax).toLocaleString()+'/年':'-'}\n单价：${(()=>{const p=calcUnitPrice(store);return p?p+'元/㎡/月':'-';})()}\n地址：${store.address||'未填写'}\n租期：${store.leaseStart||'-'} 至 ${store.leaseEnd||'-'}\n备注：${store.remark||'-'}`,
     icon: icon,
     offset: offset
   };
+  
+  if (!isMulti) {
+    // 单房东：使用 title 属性
+    markerOpts.title = `${store.name}\n品牌：${store.brand||'-'}\n类型：${store.type||'-'}${store.subType&&store.type==='直营店'?' · '+store.subType:''}\n面积：${store.area||'-'}㎡\n不含税租金：${store.rent?'¥'+Number(store.rent).toLocaleString()+'/年':'-'}\n含税租金：${store.rentTax?'¥'+Number(store.rentTax).toLocaleString()+'/年':'-'}\n单价：${(()=>{const p=calcUnitPrice(store);return p?p+'元/㎡/月':'-';})()}\n租期：${store.leaseStart||'-'} 至 ${store.leaseEnd||'-'}\n联系人：${store.contactName||'-'}\n联系电话：${store.contactPhone||'-'}\n地址：${store.address||'未填写'}\n备注：${store.remark||'-'}`;
+  }
+  
+  const marker = new AMap.Marker(markerOpts);
+  marker.on('click', () => showDetail(store));
+  
+  // 添加品牌标签
   if (store.brand) {
     const brandColor = store.brandColor || getBrandColor(store.brand);
-    markerOpts.label = {
+    marker.setLabel({
       content: `<div style="background:${brandColor};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.15);">${store.brand}</div>`,
       direction: 'bottom',
       offset: new AMap.Pixel(0, 6)
-    };
+    });
   }
-  const marker = new AMap.Marker(markerOpts);
-  marker.on('click', () => showDetail(store));
+  
+  // 多房东：使用 InfoWindow 显示表格
+  if (isMulti) {
+    const unitPrice = calcUnitPrice(store);
+    let content = `<div style="padding:8px;min-width:280px;font-size:12px;">`;
+    content += `<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">${store.name}</div>`;
+    content += `<div>品牌：${store.brand||'-'}</div>`;
+    content += `<div>类型：${store.type||'-'}${store.subType&&store.type==='直营店'?' · '+store.subType:''}</div>`;
+    content += `<div>面积：${store.area||'-'}㎡</div>`;
+    content += `<div>不含税租金：${store.rent?'¥'+Number(store.rent).toLocaleString()+'/年':'-'}</div>`;
+    content += `<div>含税租金：${store.rentTax?'¥'+Number(store.rentTax).toLocaleString()+'/年':'-'}</div>`;
+    content += `<div>单价：${unitPrice?unitPrice+'元/㎡/月':'-'}</div>`;
+    
+    if (store.landlords && store.landlords.length > 0) {
+      content += `<div style="margin-top:8px;font-weight:bold;">租赁明细</div>`;
+      content += `<table style="width:100%;border-collapse:collapse;margin:4px auto;font-size:11px;">`;
+      content += `<tr style="background:#f0f5ff;"><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">出租人</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">面积</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">不含税租金</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">含税租金</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">租期</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">电话</th></tr>`;
+      store.landlords.forEach(l => {
+        const name = l.landlord_name || '-';
+        const area = l.area ? l.area + '㎡' : '-';
+        const rent = l.rent ? '¥' + Number(l.rent).toLocaleString() : '-';
+        const rentTax = l.rent_tax ? '¥' + Number(l.rent_tax).toLocaleString() : '-';
+        const lease = (l.lease_start && l.lease_end) ? `${l.lease_start} 至 ${l.lease_end}` : '-';
+        const phone = l.phone || '-';
+        content += `<tr><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${name}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${area}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${rent}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${rentTax}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${lease}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${phone}</td></tr>`;
+      });
+      content += `</table>`;
+    }
+    
+    content += `<div style="margin-top:6px;">地址：${store.address||'未填写'}</div>`;
+    content += `<div>备注：${store.remark||'-'}</div>`;
+    content += `</div>`;
+    
+    const infoWindow = new AMap.InfoWindow({
+      content: content,
+      offset: new AMap.Pixel(0, -30)
+    });
+    
+    marker.on('mouseover', () => {
+      infoWindow.open(map, marker.getPosition());
+    });
+    marker.on('mouseout', () => {
+      infoWindow.close();
+    });
+  }
+  
   map.add(marker);
   markers.push({ id: store.id, marker, store });
 }
@@ -1146,17 +1364,20 @@ async function saveStore() {
   if (!name) { showToast('请输入门店名称', 'error'); return; }
   if (!currentClickLngLat && !editingId) { showToast('请先在地图上选择位置', 'error'); return; }
 
+  const isMultiLandlord = document.getElementById('multiLandlordToggle').checked;
   const data = {
     id: editingId || Date.now().toString(),
     name,
     brand: document.getElementById('storeBrand').value.trim(),
     brandColor: brandColors[document.getElementById('storeBrand').value.trim()] || '',
     address: document.getElementById('storeAddress').value.trim(),
+    contactName: document.getElementById('storeContactName').value.trim(),
+    contactPhone: document.getElementById('storeContactPhone').value.trim(),
     area: document.getElementById('storeArea').value,
     rent: document.getElementById('storeRent').value,
     rentTax: document.getElementById('storeRentTax').value,
-    leaseStart: document.getElementById('storeLeaseStart').value,
-    leaseEnd: document.getElementById('storeLeaseEnd').value,
+    leaseStart: isMultiLandlord ? null : (document.getElementById('storeLeaseStart').value || null),
+    leaseEnd: isMultiLandlord ? null : (document.getElementById('storeLeaseEnd').value || null),
     type: document.getElementById('storeType').value,
     subType: document.getElementById('storeSubType').value,
     color: document.getElementById('storeColor').value || '#1677ff',
@@ -1164,13 +1385,32 @@ async function saveStore() {
     customIcon: document.getElementById('storeCustomIcon').value || '',
     categoryId: document.getElementById('storeCategoryId').value || '',
     remark: document.getElementById('storeRemark').value.trim(),
+    landlordCount: isMultiLandlord ? currentLandlords.length : 0,
     lng: editingId ? storeData.find(s=>s.id===editingId).lng : currentClickLngLat.getLng(),
     lat: editingId ? storeData.find(s=>s.id===editingId).lat : currentClickLngLat.getLat(),
     createTime: editingId ? storeData.find(s=>s.id===editingId).createTime : new Date().toISOString(),
     updateTime: new Date().toISOString()
   };
 
-  await saveToDB(data);
+  const newId = await saveToDB(data);
+  // 如果是新建门店，用数据库返回的真实UUID替换临时ID
+  if (!editingId && newId) { data.id = newId; }
+  if (isMultiLandlord) {
+    await saveLandlords(data.id);
+    // 更新本地 landlords 数据
+    data.landlords = currentLandlords.map((r, i) => ({
+      landlord_name: r.landlordName || '',
+      area: parseFloat(r.area) || 0,
+      rent: parseFloat(r.rent) || 0,
+      rent_tax: parseFloat(r.rentTax) || 0,
+      lease_start: r.leaseStart || null,
+      lease_end: r.leaseEnd || null,
+      phone: r.phone || '',
+      sort_order: i
+    }));
+  } else {
+    data.landlords = [];
+  }
   writeLog(editingId ? '编辑门店' : '新增门店', name);
   markDirty();
   const existIdx = storeData.findIndex(s => s.id === data.id);
@@ -1195,28 +1435,48 @@ async function deleteStore() {
 }
 
 // ========== 详情展示 ==========
-function showDetail(store) {
+async function showDetail(store) {
   document.getElementById('detailTitle').textContent = store.name;
-  const leaseText = (store.leaseStart && store.leaseEnd) ? store.leaseStart + ' 至 ' + store.leaseEnd : '-';
-  const fields = [
-    ['地址', store.address || '-'],
-    ['面积', store.area ? store.area + ' ㎡' : '-'],
-    ['不含税年租金', store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : '-'],
-    ['含税年租金', store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : '-'],
-    ['单价', (()=>{const p=calcUnitPrice(store);return p?p+' 元/㎡/月':'-';})()],
-    ['租期', leaseText],
-    ['类型', store.type ? store.type + (store.subType && store.type === '直营店' ? ' · ' + store.subType : '') : '-'],
-    ['备注', store.remark || '-'],
-    ['创建时间', store.createTime ? new Date(store.createTime).toLocaleString('zh-CN') : '-']
-  ];
-  document.getElementById('detailBody').innerHTML = '<div class="detail-card">' +
-    fields.map(([l,v]) => `<div class="detail-row"><div class="detail-label">${l}</div><div class="detail-value">${v}</div></div>`).join('') +
-    '</div>';
+  const isMulti = (store.landlordCount || 0) > 0;
+  let html = '<div class="detail-card">';
+  html += `<div class="detail-row"><div class="detail-label">地址</div><div class="detail-value">${store.address || '-'}</div></div>`;
+  if (store.contactName || store.contactPhone) {
+    html += `<div class="detail-row"><div class="detail-label">联系人</div><div class="detail-value">${store.contactName || '-'}${store.contactPhone ? '  ' + store.contactPhone : ''}</div></div>`;
+  }
+  if (isMulti) {
+    html += `<div class="detail-row"><div class="detail-label">总面积</div><div class="detail-value">${store.area ? store.area + ' ㎡' : '-'}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">总租金(不含税)</div><div class="detail-value">${store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : '-'}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">总租金(含税)</div><div class="detail-value">${store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : '-'}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">单价</div><div class="detail-value">${(()=>{const p=calcUnitPrice(store);return p?p+' 元/㎡/月':'-';})()}</div></div>`;
+    // 加载房东明细
+    const landlords = await loadLandlords(store.id);
+    if (landlords.length > 0) {
+      html += '<div style="margin-top:12px"><div style="font-size:13px;font-weight:500;color:#333;margin-bottom:8px;">租赁明细</div>';
+      html += '<table class="landlord-table"><thead><tr><th style="width:100px;text-align:center;">出租人</th><th style="width:80px;text-align:center;">面积</th><th style="width:100px;text-align:center;">不含税租金</th><th style="width:100px;text-align:center;">含税租金</th><th style="width:180px;text-align:center;">租期</th><th style="width:110px;text-align:center;">电话</th></tr></thead><tbody>';
+      landlords.forEach(l => {
+        const lease = (l.lease_start && l.lease_end) ? l.lease_start + ' 至 ' + l.lease_end : '-';
+        html += `<tr><td style="text-align:center;">${l.landlord_name||'-'}</td><td style="text-align:center;">${l.area?l.area+'㎡':'-'}</td><td style="text-align:center;">${l.rent?'¥'+Number(l.rent).toLocaleString():'-'}</td><td style="text-align:center;">${l.rent_tax?'¥'+Number(l.rent_tax).toLocaleString():'-'}</td><td style="text-align:center;white-space:nowrap">${lease}</td><td style="text-align:center;">${l.phone||'-'}</td></tr>`;
+      });
+      html += '</tbody></table></div>';
+    }
+  } else {
+    const leaseText = (store.leaseStart && store.leaseEnd) ? store.leaseStart + ' 至 ' + store.leaseEnd : '-';
+    html += `<div class="detail-row"><div class="detail-label">面积</div><div class="detail-value">${store.area ? store.area + ' ㎡' : '-'}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">不含税年租金</div><div class="detail-value">${store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : '-'}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">含税年租金</div><div class="detail-value">${store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : '-'}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">单价</div><div class="detail-value">${(()=>{const p=calcUnitPrice(store);return p?p+' 元/㎡/月':'-';})()}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">租期</div><div class="detail-value">${leaseText}</div></div>`;
+  }
+  html += `<div class="detail-row"><div class="detail-label">类型</div><div class="detail-value">${store.type ? store.type + (store.subType && store.type === '直营店' ? ' · ' + store.subType : '') : '-'}</div></div>`;
+  html += `<div class="detail-row"><div class="detail-label">备注</div><div class="detail-value">${store.remark || '-'}</div></div>`;
+  html += `<div class="detail-row"><div class="detail-label">创建时间</div><div class="detail-value">${store.createTime ? new Date(store.createTime).toLocaleString('zh-CN') : '-'}</div></div>`;
+  html += '</div>';
+  document.getElementById('detailBody').innerHTML = html;
   document.getElementById('btnEdit').onclick = () => { closeModal('detailModal'); editStore(store.id); };
   openModal('detailModal');
 }
 
-function editStore(id) {
+async function editStore(id) {
   const store = storeData.find(s => s.id === id);
   if (!store) return;
   editingId = id;
@@ -1230,7 +1490,6 @@ function editStore(id) {
     document.getElementById('brandColorPreview').style.background = color;
     document.getElementById('brandColorPreview').style.display = '';
     setBrandColor(store.brand, color);
-    // 高亮对应色块
     setTimeout(() => {
       document.querySelectorAll('#brandColorSwatches span').forEach(s => {
         s.style.borderColor = rgbToHex(s.style.background) === color ? '#333' : 'transparent';
@@ -1240,11 +1499,23 @@ function editStore(id) {
     document.getElementById('brandColorPreview').style.display = 'none';
   }
   document.getElementById('storeAddress').value = store.address || '';
-  document.getElementById('storeArea').value = store.area || '';
-  document.getElementById('storeRent').value = store.rent || '';
-  document.getElementById('storeRentTax').value = store.rentTax || '';
-  document.getElementById('storeLeaseStart').value = store.leaseStart || '';
-  document.getElementById('storeLeaseEnd').value = store.leaseEnd || '';
+  document.getElementById('storeContactName').value = store.contactName || '';
+  document.getElementById('storeContactPhone').value = store.contactPhone || '';
+  const isMulti = (store.landlordCount || 0) > 0;
+  document.getElementById('multiLandlordToggle').checked = isMulti;
+  if (isMulti) {
+    document.getElementById('storeArea').value = store.area || '';
+    document.getElementById('storeRent').value = store.rent || '';
+    document.getElementById('storeRentTax').value = store.rentTax || '';
+    document.getElementById('storeLeaseStart').value = '';
+    document.getElementById('storeLeaseEnd').value = '';
+  } else {
+    document.getElementById('storeArea').value = store.area || '';
+    document.getElementById('storeRent').value = store.rent || '';
+    document.getElementById('storeRentTax').value = store.rentTax || '';
+    document.getElementById('storeLeaseStart').value = store.leaseStart || '';
+    document.getElementById('storeLeaseEnd').value = store.leaseEnd || '';
+  }
   document.getElementById('storeType').value = store.type || '';
   document.getElementById('storeSubType').value = store.subType || '';
   toggleSubType();
@@ -1264,6 +1535,21 @@ function editStore(id) {
   updateCatSelectText(store.categoryId);
   document.getElementById('storeRemark').value = store.remark || '';
   currentClickLngLat = null;
+  // 切换多房东模式
+  toggleLandlordMode();
+  // 清空之前的明细数据
+  document.getElementById('landlordBody').innerHTML = '';
+  currentLandlords = [];
+  // 加载房东明细
+  if (isMulti) {
+    const landlords = await loadLandlords(id);
+    landlords.forEach(l => addLandlordRow({
+      landlordName: l.landlord_name, area: l.area, rent: l.rent,
+      rentTax: l.rent_tax, leaseStart: l.lease_start, leaseEnd: l.lease_end, phone: l.phone
+    }));
+    // 重新计算汇总值
+    onLandlordChange();
+  }
   openModal('storeModal');
 }
 
@@ -2003,9 +2289,17 @@ function collapseAllCats() {
 }
 
 // ========== 导出/导入 ==========
-function exportData() {
+async function exportData() {
   if (storeData.length === 0 && categories.length === 0) { showToast('暂无数据可导出', 'error'); return; }
-  const data = { stores: storeData, categories: categories, iconLibrary: iconLibrary, exportTime: new Date().toISOString() };
+  // 收集多房东门店的明细
+  const landlordMap = {};
+  for (const s of storeData) {
+    if ((s.landlordCount || 0) > 0) {
+      const landlords = await loadLandlords(s.id);
+      if (landlords.length > 0) landlordMap[s.id] = landlords;
+    }
+  }
+  const data = { stores: storeData, categories: categories, iconLibrary: iconLibrary, landlords: landlordMap, exportTime: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2024,10 +2318,13 @@ function exportExcel() {
     const parentCat = cat && cat.parentId ? categories.find(c => c.id === cat.parentId) : null;
     const catName = parentCat ? parentCat.name + ' > ' + cat.name : (cat ? cat.name : '未分类');
     const unitPrice = calcUnitPrice(s);
+    const isMulti = (s.landlordCount || 0) > 0;
     return {
       '门店名称': s.name || '',
       '品牌/连锁': s.brand || '',
       '地址': s.address || '',
+      '联系人': s.contactName || '',
+      '联系电话': s.contactPhone || '',
       '面积(㎡)': s.area || '',
       '不含税年租金(元)': s.rent ? Number(s.rent) : '',
       '含税年租金(元)': s.rentTax ? Number(s.rentTax) : '',
@@ -2037,15 +2334,15 @@ function exportExcel() {
       '所属分类': catName,
       '租期开始': s.leaseStart || '',
       '租期结束': s.leaseEnd || '',
+      '房东数': isMulti ? s.landlordCount : 1,
       '备注': s.remark || '',
       '创建时间': s.createTime ? new Date(s.createTime).toLocaleString('zh-CN') : ''
     };
   });
   const ws = XLSX.utils.json_to_sheet(rows);
-  // 设置列宽
   ws['!cols'] = [
-    {wch:18},{wch:15},{wch:30},{wch:10},{wch:16},{wch:16},{wch:14},
-    {wch:12},{wch:12},{wch:20},{wch:12},{wch:12},{wch:20},{wch:22}
+    {wch:18},{wch:15},{wch:30},{wch:8},{wch:14},{wch:10},{wch:16},{wch:16},{wch:14},
+    {wch:12},{wch:12},{wch:20},{wch:12},{wch:12},{wch:8},{wch:20},{wch:22}
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '门店信息');
@@ -2078,6 +2375,12 @@ async function importData(event) {
     }
     for (const item of stores) {
       if (item.id && item.name && item.lng && item.lat) { await saveToDB(item); storeCount++; }
+    }
+    // 恢复房东明细
+    const landlordMap = parsed.landlords || {};
+    for (const storeId in landlordMap) {
+      const rows = landlordMap[storeId].map((r, i) => ({...r, sort_order: i}));
+      await sb.rpc('rpc_upsert_landlords', { p_store_id: storeId, p_rows: JSON.stringify(rows) });
     }
     storeData = []; categories = []; iconLibrary = [];
     await loadStores();
@@ -2174,7 +2477,7 @@ function closeModal(id) {
 }
 
 function clearForm() {
-  ['storeName','storeBrand','storeAddress','storeArea','storeRent','storeRentTax','storeLeaseStart','storeLeaseEnd','storeRemark'].forEach(id => {
+  ['storeName','storeBrand','storeAddress','storeContactName','storeContactPhone','storeArea','storeRent','storeRentTax','storeLeaseStart','storeLeaseEnd','storeRemark'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('storeCategoryId').value = '';
@@ -2190,6 +2493,18 @@ function clearForm() {
   document.getElementById('brandColorPreview').style.display = 'none';
   document.querySelectorAll('.icon-style-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.icon-style-btn[data-style="pin"]').classList.add('active');
+  // 重置多房东
+  document.getElementById('multiLandlordToggle').checked = false;
+  document.getElementById('landlordSection').style.display = 'none';
+  document.getElementById('leaseRow').style.display = '';
+  document.getElementById('landlordBody').innerHTML = '';
+  currentLandlords = [];
+  const areaEl = document.getElementById('storeArea');
+  const rentEl = document.getElementById('storeRent');
+  const rentTaxEl = document.getElementById('storeRentTax');
+  areaEl.readOnly = false; areaEl.placeholder = '如：120';
+  rentEl.readOnly = false; rentEl.placeholder = '如：240000';
+  rentTaxEl.readOnly = false; rentTaxEl.placeholder = '如：254400';
 }
 
 function selectIconStyle(el) {
@@ -2337,9 +2652,9 @@ function showBackupModal() {
   openModal('backupModal');
 }
 
-function doBackupAndClose() {
+async function doBackupAndClose() {
   isBackingUp = true;
-  exportData();
+  await exportData();
   setTimeout(() => {
     closeModal('backupModal');
     window.close();
