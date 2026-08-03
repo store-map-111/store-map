@@ -2031,7 +2031,7 @@ function bindDragEvents() {
       mouseDrag.touchTimer = setTimeout(() => {
         mouseDrag.touchTimer = null;
         mouseDrag.longPressReady = true;
-      }, 3000);
+      }, 2000);
     }, { passive: true });
     el.addEventListener('touchend', e => {
       if (mouseDrag.touchTimer) { clearTimeout(mouseDrag.touchTimer); mouseDrag.touchTimer = null; }
