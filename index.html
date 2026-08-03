@@ -1913,7 +1913,7 @@ let dragType = ''; // '' | 'root'
 let dragCatId = '';
 
 // 二类鼠标拖拽状态
-let mouseDrag = { active: false, el: null, clone: null, startX: 0, startY: 0, targetId: '', didDrag: false };
+let mouseDrag = { active: false, el: null, clone: null, startX: 0, startY: 0, targetId: '', didDrag: false, touchTimer: null, longPressReady: false };
 let mouseDragInited = false;
 
 function bindDragEvents() {
@@ -2023,9 +2023,19 @@ function bindDragEvents() {
     });
     el.addEventListener('touchstart', e => {
       const t = e.touches[0];
+      // 手机端长按延迟，避免滑动列表时误触拖拽
+      if (mouseDrag.touchTimer) clearTimeout(mouseDrag.touchTimer);
       mouseDrag.el = el.closest('.cat-sub');
       mouseDrag.startX = t.clientX;
       mouseDrag.startY = t.clientY;
+      mouseDrag.touchTimer = setTimeout(() => {
+        mouseDrag.touchTimer = null;
+        mouseDrag.longPressReady = true;
+      }, 1000);
+    }, { passive: true });
+    el.addEventListener('touchend', e => {
+      if (mouseDrag.touchTimer) { clearTimeout(mouseDrag.touchTimer); mouseDrag.touchTimer = null; }
+      mouseDrag.longPressReady = false;
     }, { passive: true });
   });
 }
@@ -2087,6 +2097,7 @@ function initMouseDrag() {
     mouseDrag.el = null;
     mouseDrag.clone = null;
     mouseDrag.targetId = '';
+    mouseDrag.longPressReady = false;
     setTimeout(() => { mouseDrag.didDrag = false; }, 50);
   }
 
@@ -2108,6 +2119,8 @@ function initMouseDrag() {
   document.addEventListener('touchmove', e => {
     if (!mouseDrag.el) return;
     const { x, y } = getXY(e);
+    // 长按未就绪，取消拖拽
+    if (!mouseDrag.longPressReady) { mouseDrag.el = null; return; }
     if (!mouseDrag.active) {
       if (Math.abs(x - mouseDrag.startX) < 5 && Math.abs(y - mouseDrag.startY) < 5) return;
       startDrag(x, y);
