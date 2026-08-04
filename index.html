@@ -751,6 +751,12 @@ let brandColors = JSON.parse(localStorage.getItem('brandColors') || '{}');
 const BRAND_PALETTE = ['#1677ff','#ff4d4f','#52c41a','#fa8c16','#722ed1','#13c2c2','#eb2f96','#faad14','#2f54eb','#a0d911','#f5222d','#1890ff'];
 let brandColorIdx = 0;
 
+// ========== 安全工具 ==========
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // ========== Supabase 云端数据操作 ==========
 // 字段映射：app驼峰 → 数据库蛇形
 const STORE_FIELD_MAP = {
@@ -975,13 +981,13 @@ function addLandlordRow(data) {
   const idx = tbody.children.length;
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input placeholder="出租人" value="${d.landlordName||''}" oninput="onLandlordChange()"></td>
+    <td><input placeholder="出租人" value="${escHtml(d.landlordName)||''}" oninput="onLandlordChange()"></td>
     <td><input type="number" placeholder="面积" value="${d.area||''}" oninput="onLandlordChange()"></td>
     <td><input type="number" placeholder="不含税" value="${d.rent||''}" oninput="onLandlordChange()"></td>
     <td><input type="number" placeholder="含税" value="${d.rentTax||''}" oninput="onLandlordChange()"></td>
     <td><input type="date" value="${d.leaseStart||''}" oninput="onLandlordChange()"></td>
     <td><input type="date" value="${d.leaseEnd||''}" oninput="onLandlordChange()"></td>
-    <td><input placeholder="电话" value="${d.phone||''}" oninput="onLandlordChange()"></td>
+    <td><input placeholder="电话" value="${escHtml(d.phone)||''}" oninput="onLandlordChange()"></td>
     <td><button class="btn-remove-row" onclick="removeLandlordRow(this)" title="删除">✕</button></td>`;
   tbody.appendChild(tr);
   if (!data) onLandlordChange();
@@ -1147,9 +1153,10 @@ function initMapSearch() {
           if (status === 'complete' && result.poiList && result.poiList.pois.length > 0) {
             let html = '';
             result.poiList.pois.forEach(poi => {
-              html += `<div class="map-search-item" data-lng="${poi.location.getLng()}" data-lat="${poi.location.getLat()}" data-name="${poi.name}" data-addr="${poi.pname}${poi.cityname}${poi.adname}${poi.address}">
-                <div class="addr-name">${poi.name}</div>
-                <div class="addr-detail">${poi.pname}${poi.cityname}${poi.adname}${poi.address}</div>
+              const addr = `${poi.pname}${poi.cityname}${poi.adname}${poi.address}`;
+              html += `<div class="map-search-item" data-lng="${poi.location.getLng()}" data-lat="${poi.location.getLat()}" data-name="${escHtml(poi.name)}" data-addr="${escHtml(addr)}">
+                <div class="addr-name">${escHtml(poi.name)}</div>
+                <div class="addr-detail">${escHtml(addr)}</div>
               </div>`;
             });
             results.innerHTML = html;
@@ -1442,9 +1449,9 @@ async function showDetail(store) {
   document.getElementById('detailTitle').textContent = store.name;
   const isMulti = (store.landlordCount || 0) > 0;
   let html = '<div class="detail-card">';
-  html += `<div class="detail-row"><div class="detail-label">地址</div><div class="detail-value">${store.address || '-'}</div></div>`;
+  html += `<div class="detail-row"><div class="detail-label">地址</div><div class="detail-value">${escHtml(store.address) || '-'}</div></div>`;
   if (store.contactName || store.contactPhone) {
-    html += `<div class="detail-row"><div class="detail-label">联系人</div><div class="detail-value">${store.contactName || '-'}${store.contactPhone ? '  ' + store.contactPhone : ''}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">联系人</div><div class="detail-value">${escHtml(store.contactName) || '-'}${store.contactPhone ? '  ' + escHtml(store.contactPhone) : ''}</div></div>`;
   }
   if (isMulti) {
     html += `<div class="detail-row"><div class="detail-label">总面积</div><div class="detail-value">${store.area ? store.area + ' ㎡' : '-'}</div></div>`;
@@ -1456,9 +1463,9 @@ async function showDetail(store) {
     if (landlords.length > 0) {
       html += '<div style="margin-top:12px"><div style="font-size:13px;font-weight:500;color:#333;margin-bottom:8px;">租赁明细</div>';
       landlords.forEach((l, i) => {
-        const lease = (l.lease_start && l.lease_end) ? l.lease_start + ' 至 ' + l.lease_end : '-';
+        const lease = (l.lease_start && l.lease_end) ? escHtml(l.lease_start) + ' 至 ' + escHtml(l.lease_end) : '-';
         html += `<div style="background:#f7f9fc;border:1px solid #e8eef8;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;">
-          <div style="font-weight:600;color:#1a1a1a;margin-bottom:6px;">${i+1}. ${l.landlord_name||'-'}　<span style="font-weight:400;color:#1677ff">${l.phone||''}</span></div>
+          <div style="font-weight:600;color:#1a1a1a;margin-bottom:6px;">${i+1}. ${escHtml(l.landlord_name)||'-'}　<span style="font-weight:400;color:#1677ff">${escHtml(l.phone)||''}</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:4px 16px;color:#555;">
             <span>面积：<b style="color:#1a1a1a">${l.area?l.area+'㎡':'-'}</b></span>
             <span>不含税：<b style="color:#1a1a1a">${l.rent?'¥'+Number(l.rent).toLocaleString():'-'}</b></span>
@@ -1470,15 +1477,15 @@ async function showDetail(store) {
       html += '</div>';
     }
   } else {
-    const leaseText = (store.leaseStart && store.leaseEnd) ? store.leaseStart + ' 至 ' + store.leaseEnd : '-';
+    const leaseText = (store.leaseStart && store.leaseEnd) ? escHtml(store.leaseStart) + ' 至 ' + escHtml(store.leaseEnd) : '-';
     html += `<div class="detail-row"><div class="detail-label">面积</div><div class="detail-value">${store.area ? store.area + ' ㎡' : '-'}</div></div>`;
     html += `<div class="detail-row"><div class="detail-label">不含税年租金</div><div class="detail-value">${store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : '-'}</div></div>`;
     html += `<div class="detail-row"><div class="detail-label">含税年租金</div><div class="detail-value">${store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : '-'}</div></div>`;
     html += `<div class="detail-row"><div class="detail-label">单价</div><div class="detail-value">${(()=>{const p=calcUnitPrice(store);return p?p+' 元/㎡/月':'-';})()}</div></div>`;
     html += `<div class="detail-row"><div class="detail-label">租期</div><div class="detail-value">${leaseText}</div></div>`;
   }
-  html += `<div class="detail-row"><div class="detail-label">类型</div><div class="detail-value">${store.type ? store.type + (store.subType && store.type === '直营店' ? ' · ' + store.subType : '') : '-'}</div></div>`;
-  html += `<div class="detail-row"><div class="detail-label">备注</div><div class="detail-value">${store.remark || '-'}</div></div>`;
+  html += `<div class="detail-row"><div class="detail-label">类型</div><div class="detail-value">${store.type ? escHtml(store.type) + (store.subType && store.type === '直营店' ? ' · ' + escHtml(store.subType) : '') : '-'}</div></div>`;
+  html += `<div class="detail-row"><div class="detail-label">备注</div><div class="detail-value">${escHtml(store.remark) || '-'}</div></div>`;
   html += `<div class="detail-row"><div class="detail-label">创建时间</div><div class="detail-value">${store.createTime ? new Date(store.createTime).toLocaleString('zh-CN') : '-'}</div></div>`;
   html += '</div>';
   document.getElementById('detailBody').innerHTML = html;
@@ -1588,7 +1595,7 @@ function populateCatParentSelect(excludeId) {
   const sel = document.getElementById('catParent');
   sel.innerHTML = '<option value="">无（作为一级分类）</option>';
   categories.filter(c => c.id !== excludeId && !c.parentId).forEach(c => {
-    sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+    sel.innerHTML += `<option value="${c.id}">${escHtml(c.name)}</option>`;
   });
 }
 
@@ -1643,9 +1650,9 @@ function renderCatSelectOptions() {
   const currentVal = document.getElementById('storeCategoryId').value;
   let html = `<div class="cat-select-option ${!currentVal?'selected':''}" onclick="selectCategory('','未分类')">未分类</div>`;
   categories.filter(c => !c.parentId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).forEach(c => {
-    html += `<div class="cat-select-option ${currentVal===c.id?'selected':''}" onclick="selectCategory('${c.id}','${c.name}')">${c.name}</div>`;
+    html += `<div class="cat-select-option ${currentVal===c.id?'selected':''}" onclick="selectCategory('${c.id}','${escHtml(c.name)}')">${escHtml(c.name)}</div>`;
     categories.filter(sc => sc.parentId === c.id).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).forEach(sc => {
-      html += `<div class="cat-select-option sub ${currentVal===sc.id?'selected':''}" onclick="selectCategory('${sc.id}','${c.name} / ${sc.name}')">${sc.name}</div>`;
+      html += `<div class="cat-select-option sub ${currentVal===sc.id?'selected':''}" onclick="selectCategory('${sc.id}','${escHtml(c.name)} / ${escHtml(sc.name)}')">${escHtml(sc.name)}</div>`;
     });
   });
   dd.innerHTML = html;
@@ -1781,7 +1788,7 @@ function updateSidebar() {
       html += `<div class="cat-group" data-cat-id="${cat.id}">
         <div class="cat-header cat-draggable ${isCategoryFullyVisible(cat.id)?'cat-visible':''}" draggable="true" data-cat-id="${cat.id}" onclick="if(dragType)return;onCatClick('${cat.id}');event.stopPropagation();" ondblclick="onCatDblClick('${cat.id}')">
           <span class="cat-arrow ${isOpen?'open':''}">▶</span>
-          <span class="cat-name">${cat.name}</span>
+          <span class="cat-name">${escHtml(cat.name)}</span>
           <span class="cat-count">${totalCount}</span>
           <div class="cat-actions">
             <button class="cat-action-btn" onclick="event.stopPropagation();showAddCategory('${cat.id}')" title="添加子分类">＋</button>
@@ -1795,7 +1802,7 @@ function updateSidebar() {
         html += `<div class="cat-sub" data-sub-id="${sc.id}" data-parent-id="${cat.id}">
           <div class="cat-header ${isCategoryFullyVisible(sc.id)?'cat-visible':''}" data-sub-id="${sc.id}" data-parent-id="${cat.id}" onclick="if(dragType||mouseDrag.didDrag)return;onCatClick('${sc.id}');event.stopPropagation();" ondblclick="onCatDblClick('${sc.id}')">
             <span class="cat-arrow ${scOpen?'open':''}">▶</span>
-            <span class="cat-name">${sc.name}</span>
+            <span class="cat-name">${escHtml(sc.name)}</span>
             <span class="cat-count">${scStores.length}</span>
             <div class="cat-actions">
               <button class="cat-action-btn" onclick="event.stopPropagation();showEditCategory('${sc.id}')" title="编辑">✏️</button>
@@ -1830,20 +1837,20 @@ function updateSidebar() {
     brandCount[brand] = (brandCount[brand] || 0) + 1;
   });
   const brandEntries = Object.entries(brandCount).sort((a, b) => b[1] - a[1]);
-  const brandHtml = brandEntries.map(([name, count]) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:#f0f5ff;color:#1677ff;border-radius:20px;font-size:13px;font-weight:500;white-space:nowrap;"><span>${name}</span><span style="background:#1677ff;color:#fff;padding:1px 8px;border-radius:10px;font-size:12px;">${count}</span></span>`).join('');
+  const brandHtml = brandEntries.map(([name, count]) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:#f0f5ff;color:#1677ff;border-radius:20px;font-size:13px;font-weight:500;white-space:nowrap;"><span>${escHtml(name)}</span><span style="background:#1677ff;color:#fff;padding:1px 8px;border-radius:10px;font-size:12px;">${count}</span></span>`).join('');
   document.getElementById('statBrands').innerHTML = brandHtml || '<span style="color:#bbb;font-size:13px;">暂无数据</span>';
 }
 
 function renderStoreItem(s) {
   const isVisible = visibleStores.has(s.id);
   return `<div class="cat-store-item ${isVisible?'visible':''}" draggable="true" data-id="${s.id}" onclick="toggleStoreVisible('${s.id}')" oncontextmenu="showContextMenu(event,'${s.id}')">
-    <div class="cat-store-name">${isVisible?'📍 ':''}${s.name}</div>
+    <div class="cat-store-name">${isVisible?' ':''}${escHtml(s.name)}</div>
     <div class="cat-store-info">
       <div style="color:#237804">面积：${s.area ? s.area+'㎡' : '-'}</div>
       <div style="color:#e53e3e">不含税：${(()=>{const v=Number(s.rent);return (!isNaN(v)&&v>0)?v.toLocaleString()+'元':'-';})()}，含税：${(()=>{const v=Number(s.rentTax);return (!isNaN(v)&&v>0)?v.toLocaleString()+'元':'-';})()}</div>
       <div style="color:#e53e3e">单价：${(()=>{const p=calcUnitPrice(s);return p?p+'元/㎡/月':'-';})()}</div>
     </div>
-    ${s.type ? `<span class="store-item-tag">${s.type}${s.subType && s.type==='直营店' ? ' · '+s.subType : ''}</span>` : ''}
+    ${s.type ? `<span class="store-item-tag">${escHtml(s.type)}${s.subType && s.type==='直营店' ? ' · '+escHtml(s.subType) : ''}</span>` : ''}
   </div>`;
 }
 
@@ -2187,9 +2194,9 @@ function showContextMenu(e, storeId) {
   html += `<div class="ctx-sub-label">移动到分类</div>`;
   html += `<div class="ctx-item" onclick="moveStoreToCategory('${storeId}','');hideContextMenu()"> 未分类</div>`;
   categories.filter(c => !c.parentId).forEach(c => {
-    html += `<div class="ctx-item" onclick="moveStoreToCategory('${storeId}','${c.id}');hideContextMenu()">📁 ${c.name}</div>`;
+    html += `<div class="ctx-item" onclick="moveStoreToCategory('${storeId}','${c.id}');hideContextMenu()">📁 ${escHtml(c.name)}</div>`;
     categories.filter(sc => sc.parentId === c.id).forEach(sc => {
-      html += `<div class="ctx-item" style="padding-left:28px;font-size:12px" onclick="moveStoreToCategory('${storeId}','${sc.id}');hideContextMenu()"> ${sc.name}</div>`;
+      html += `<div class="ctx-item" style="padding-left:28px;font-size:12px" onclick="moveStoreToCategory('${storeId}','${sc.id}');hideContextMenu()"> ${escHtml(sc.name)}</div>`;
     });
   });
   html += `<div class="ctx-divider"></div>`;
@@ -2545,7 +2552,7 @@ async function loadLogs() {
     const time = new Date(r.created_at).toLocaleString('zh-CN', { hour12: false });
     const email = (r.user_email || '').split('@')[0];
     const cls = actionClass(r.action);
-    html += `<tr><td style="white-space:nowrap">${time}</td><td>${email}</td><td><span class="log-action ${cls}">${r.action}</span></td><td>${r.detail || ''}</td></tr>`;
+    html += `<tr><td style="white-space:nowrap">${time}</td><td>${escHtml(email)}</td><td><span class="log-action ${cls}">${escHtml(r.action)}</span></td><td>${escHtml(r.detail) || ''}</td></tr>`;
   });
   html += '</tbody></table>';
   container.innerHTML = html;
