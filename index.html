@@ -1682,7 +1682,9 @@ document.addEventListener('click', e => {
 // ========== 侧边栏 ==========
 function calcUnitPrice(store) {
   if (!store.area || Number(store.area) <= 0) return null;
-  const rent = store.rent ? Number(store.rent) : (store.rentTax ? Number(store.rentTax) : 0);
+  const rentVal = Number(store.rent);
+  const rentTaxVal = Number(store.rentTax);
+  const rent = (!isNaN(rentVal) && rentVal > 0) ? rentVal : ((!isNaN(rentTaxVal) && rentTaxVal > 0) ? rentTaxVal : 0);
   if (rent <= 0) return null;
   return (rent / Number(store.area) / 12).toFixed(2);
 }
