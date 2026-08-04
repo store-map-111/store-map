@@ -212,7 +212,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .cat-store-item.dragging { opacity: 0.4; }
 .cat-store-item.drag-over { border-top: 2px solid #1677ff; }
 .cat-store-name { font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 2px; }
-.cat-store-info { font-size: 11px; color: #999; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.cat-store-info { font-size: 11px; color: #999; display: block; }
 
 /* 未分类区域 */
 .uncat-header { display: flex; align-items: center; padding: 8px 10px; border-radius: 6px; cursor: pointer; border-top: 1px solid #f0f0f0; margin-top: 4px; }
@@ -1839,9 +1839,9 @@ function renderStoreItem(s) {
   return `<div class="cat-store-item ${isVisible?'visible':''}" draggable="true" data-id="${s.id}" onclick="toggleStoreVisible('${s.id}')" oncontextmenu="showContextMenu(event,'${s.id}')">
     <div class="cat-store-name">${isVisible?'📍 ':''}${s.name}</div>
     <div class="cat-store-info">
-      <span style="color:#1a1a1a">${s.area ? s.area+'㎡' : ''}</span>
-      <span style="color:#e53e3e;white-space:nowrap">${s.rent ? '不含税'+Number(s.rent).toLocaleString()+'元' : ''}${s.rent && s.rentTax ? '，' : ''}${s.rentTax ? '含税'+Number(s.rentTax).toLocaleString()+'元' : ''}</span>
-      ${(()=>{const p=calcUnitPrice(s);return p?'<span style="color:#e53e3e;white-space:nowrap">'+p+'元/㎡/月</span>':'';})()}
+      <div style="color:#237804">面积：${s.area ? s.area+'㎡' : '-'}</div>
+      <div style="color:#e53e3e">不含税：${(()=>{const v=Number(s.rent);return (!isNaN(v)&&v>0)?v.toLocaleString()+'元':'-';})()}，含税：${(()=>{const v=Number(s.rentTax);return (!isNaN(v)&&v>0)?v.toLocaleString()+'元':'-';})()}</div>
+      <div style="color:#e53e3e">单价：${(()=>{const p=calcUnitPrice(s);return p?p+'元/㎡/月':'-';})()}</div>
     </div>
     ${s.type ? `<span class="store-item-tag">${s.type}${s.subType && s.type==='直营店' ? ' · '+s.subType : ''}</span>` : ''}
   </div>`;
