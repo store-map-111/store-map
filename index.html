@@ -651,7 +651,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 let loginAttempts = 0;
 const MAX_ATTEMPTS = 10;
-const SESSION_TIMEOUT = 10 * 60 * 1000; // 10分钟
+const SESSION_TIMEOUT = 60 * 60 * 1000; // 60分钟
 let lockoutUntil = parseInt(sessionStorage.getItem('lockoutUntil') || '0');
 
 function createLoginOverlay() {
