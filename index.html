@@ -1894,9 +1894,10 @@ function toggleCategoryVisible(catId) {
         addMarker(s);
       }
     });
-    // Center map on first store
-    if (catStores.length > 0) {
-      map.setZoomAndCenter(14, [catStores[0].lng, catStores[0].lat]);
+    // 定位到最后新增或修改的门店
+    const latestStore = [...catStores].sort((a, b) => new Date(b.updateTime || 0) - new Date(a.updateTime || 0))[0];
+    if (latestStore) {
+      map.setZoomAndCenter(14, [latestStore.lng, latestStore.lat]);
     }
   }
   updateSidebar();
