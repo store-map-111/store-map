@@ -831,9 +831,10 @@ const STORE_FIELD_MAP = {
   brandColor:'brand_color', rentTax:'rent_tax', leaseStart:'lease_start',
   leaseEnd:'lease_end', subType:'sub_type', iconStyle:'icon_style',
   customIcon:'custom_icon', categoryId:'category_id', createTime:'create_time', updateTime:'update_time',
-  contactName:'contact_name', contactPhone:'contact_phone', landlordCount:'landlord_count'
+  contactName:'contact_name', contactPhone:'contact_phone', landlordCount:'landlord_count',
+  deletedAt:'deleted_at'
 };
-const CAT_FIELD_MAP = { parentId:'parent_id', sortOrder:'sort_order', createTime:'create_time' };
+const CAT_FIELD_MAP = { parentId:'parent_id', sortOrder:'sort_order', createTime:'create_time', updateTime:'update_time', deletedAt:'deleted_at' };
 
 function toSnake(obj, map) {
   const r = {};
@@ -994,154 +995,152 @@ async function syncFromCloud() {
   try {
     const cached = await getCachedData();
     const lastSyncTime = cached?.lastSyncTime || null;
-    // 严格校验：必须是非空的有效时间字符串
     if (!lastSyncTime || typeof lastSyncTime !== 'string' || lastSyncTime.trim() === '' || isNaN(Date.parse(lastSyncTime))) {
       console.log('[同步] lastSyncTime 无效，跳过增量同步');
       return;
     }
     
     let synced = false;
-    
-    // 用返回记录中最大的 update_time 更新 lastSyncTime，确保不跳过任何数据
     let syncLastSyncTime = null;
     
-    // 1. 增量同步门店：优先用增量 RPC，失败时 fallback 到全量 RPC + 本地 diff
-    let cloudStores = null;
-    let isIncremental = true;
+    // 辅助：从记录列表中提取最大 update_time
+    function getMaxTime(list, field = 'updateTime') {
+      if (!list || list.length === 0) return '';
+      return list.reduce((max, r) => {
+        const t = r[field] || '';
+        return t > max ? t : max;
+      }, '');
+    }
+    
+    // 1. 增量同步门店（含软删除）
+    let storeList = [];
     try {
       const result = await sb.rpc('rpc_sync_stores', { p_since: lastSyncTime });
       if (result.error) throw result.error;
-      cloudStores = result.data;
-      console.log('[同步] 增量查询成功，返回', Array.isArray(cloudStores) ? cloudStores.length : 0, '条');
+      storeList = (typeof result.data === 'string' ? JSON.parse(result.data || '[]') : (result.data || [])).map(r => toCamel(r, STORE_FIELD_MAP));
+      console.log('[同步] 门店增量查询成功，返回', storeList.length, '条');
     } catch (e) {
-      console.warn('[同步] 增量查询失败(', e.message, ')，改用全量RPC对比...');
-      isIncremental = false;
+      console.warn('[同步] 门店增量查询失败(', e.message, ')，改用全量RPC对比...');
       try {
         const result2 = await sb.rpc('rpc_select_stores');
         if (result2.error) throw result2.error;
-        cloudStores = result2.data;
-        console.log('[同步] 全量RPC返回', Array.isArray(cloudStores) ? cloudStores.length : 0, '条');
+        const fullList = (typeof result2.data === 'string' ? JSON.parse(result2.data || '[]') : (result2.data || [])).map(r => toCamel(r, STORE_FIELD_MAP));
+        const cloudIds = new Set(fullList.map(s => s.id));
+        const deletedStores = storeData.filter(s => !cloudIds.has(s.id));
+        if (deletedStores.length > 0) {
+          storeData = storeData.filter(s => cloudIds.has(s.id));
+          console.log('[同步] 门店已删除:', deletedStores.length, '条 →', deletedStores.map(s => s.name).join('、'));
+          synced = true;
+        }
+        for (const ns of fullList) {
+          const idx = storeData.findIndex(s => s.id === ns.id);
+          if (idx >= 0 && ns.updateTime !== storeData[idx].updateTime) {
+            storeData[idx] = ns; synced = true;
+          } else if (idx < 0) {
+            storeData.push(ns); synced = true;
+          }
+        }
+        storeList = fullList;
       } catch (e2) {
         console.error('[同步] 全量RPC也失败:', e2.message);
-        cloudStores = null;
+        storeList = [];
       }
     }
     
-    if (cloudStores !== null) {
-      let storeList = (typeof cloudStores === 'string' ? JSON.parse(cloudStores || '[]') : (cloudStores || [])).map(r => toCamel(r, STORE_FIELD_MAP));
-      
-      if (isIncremental) {
-        // 增量模式：返回的就是变化记录，直接合并
-        if (storeList.length > 0) {
-          for (const ns of storeList) {
-            const idx = storeData.findIndex(s => s.id === ns.id);
-            if (idx >= 0) storeData[idx] = ns;
-            else storeData.push(ns);
-          }
-          // 加载多房东门店明细
-          for (const s of storeList) {
-            if ((s.landlordCount || 0) > 0) {
-              const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: s.id });
-              if (landlords) {
-                const idx = storeData.findIndex(x => x.id === s.id);
-                if (idx >= 0) storeData[idx].landlords = landlords;
-              }
-            }
-          }
-          synced = true;
-          console.log('[同步] 门店增量:', storeList.length, '条 →', storeList.map(s => s.name).join('、'));
-        } else {
-          console.log('[同步] 门店无变化');
-        }
-      } else {
-        // 全量对比模式：逐条对比，只更新变化的
-        let changedCount = 0;
-        const changedNames = [];
-        const changedIds = new Set();
-        for (const ns of storeList) {
+    if (storeList.length > 0) {
+      const activeStores = [];
+      const deletedStores = [];
+      for (const ns of storeList) {
+        if (ns.deletedAt) deletedStores.push(ns);
+        else activeStores.push(ns);
+      }
+      if (deletedStores.length > 0) {
+        storeData = storeData.filter(s => !deletedStores.find(d => d.id === s.id));
+        synced = true;
+        console.log('[同步] 门店已删除:', deletedStores.length, '条 →', deletedStores.map(s => s.name).join('、'));
+      }
+      if (activeStores.length > 0) {
+        for (const ns of activeStores) {
           const idx = storeData.findIndex(s => s.id === ns.id);
-          if (idx >= 0) {
-            // 对比是否有变化（简单对比 updateTime）
-            if (ns.updateTime !== storeData[idx].updateTime) {
-              storeData[idx] = ns;
-              changedCount++;
-              changedNames.push(ns.name);
-              changedIds.add(ns.id);
-            }
-          } else {
-            storeData.push(ns);
-            changedCount++;
-            changedNames.push(ns.name);
-            changedIds.add(ns.id);
-          }
+          if (idx >= 0) storeData[idx] = ns;
+          else storeData.push(ns);
         }
-        // 加载变化门店的多房东明细
-        for (const ns of storeList) {
-          if ((ns.landlordCount || 0) > 0 && changedIds.has(ns.id)) {
-            const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: ns.id });
+        for (const s of activeStores) {
+          if ((s.landlordCount || 0) > 0) {
+            const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: s.id });
             if (landlords) {
-              const idx = storeData.findIndex(x => x.id === ns.id);
+              const idx = storeData.findIndex(x => x.id === s.id);
               if (idx >= 0) storeData[idx].landlords = landlords;
             }
           }
         }
-        if (changedCount > 0) {
-          synced = true;
-          console.log('[同步] 门店变化:', changedCount, '条 →', changedNames.join('、'));
-        } else {
-          console.log('[同步] 门店无变化(全量对比)');
+        synced = true;
+        console.log('[同步] 门店增量:', activeStores.length, '条 →', activeStores.map(s => s.name).join('、'));
+      }
+      const t = getMaxTime(storeList);
+      if (t > syncLastSyncTime) syncLastSyncTime = t;
+    } else {
+      console.log('[同步] 门店无变化');
+    }
+    
+    // 2. 增量同步分类
+    try {
+      const result = await sb.rpc('rpc_sync_categories', { p_since: lastSyncTime });
+      if (result.error) throw result.error;
+      const catList = (typeof result.data === 'string' ? JSON.parse(result.data || '[]') : (result.data || [])).map(r => toCamel(r, CAT_FIELD_MAP));
+      if (catList.length > 0) {
+        const deletedCats = [];
+        for (const nc of catList) {
+          if (nc.deletedAt) { deletedCats.push(nc); continue; }
+          const idx = categories.findIndex(c => c.id === nc.id);
+          if (idx >= 0) categories[idx] = nc;
+          else categories.push(nc);
         }
+        if (deletedCats.length > 0) {
+          categories = categories.filter(c => !deletedCats.find(d => d.id === c.id));
+          console.log('[同步] 分类已删除:', deletedCats.length, '条 →', deletedCats.map(c => c.name).join('、'));
+        }
+        const activeCats = catList.filter(c => !c.deletedAt);
+        synced = true;
+        console.log('[同步] 分类增量:', activeCats.length, '条 →', activeCats.map(c => c.name).join('、'));
+        const t = getMaxTime(catList);
+        if (t > syncLastSyncTime) syncLastSyncTime = t;
+      } else {
+        console.log('[同步] 分类无变化');
       }
-      
-      // 用返回记录中最大的 update_time 作为 lastSyncTime，避免跳过数据
-      if (storeList.length > 0) {
-        const maxTime = storeList.reduce((max, s) => {
-          const t = s.updateTime || '';
-          return t > max ? t : max;
-        }, '');
-        if (maxTime) syncLastSyncTime = maxTime;
-      }
+    } catch (e) {
+      console.warn('[同步] 分类增量失败:', e.message);
     }
     
-    // 1b. 删除检测：仅在缓存未命中时由全量同步处理，增量同步不做删除检测
-    // （避免直接查表受 RLS 限制导致误删，删除操作请使用设置中的"全量同步"按钮）
-    
-    // 2. 增量同步分类（表无 update_time，全量同步）
-    const { data: catList, error: cErr } = await sb.rpc('rpc_select_categories');
-    if (!cErr && catList) {
-      const newCats = (catList || []).map(r => toCamel(r, CAT_FIELD_MAP));
-      // 对比差异，只更新变化的
-      const oldMap = new Map(categories.map(c => [c.id, JSON.stringify(c)]));
-      let catChanged = false;
-      for (const nc of newCats) {
-        if (oldMap.get(nc.id) !== JSON.stringify(nc)) catChanged = true;
-        const idx = categories.findIndex(c => c.id === nc.id);
-        if (idx >= 0) categories[idx] = nc;
-        else { categories.push(nc); catChanged = true; }
+    // 3. 增量同步图标
+    try {
+      const result = await sb.rpc('rpc_sync_icons', { p_since: lastSyncTime });
+      if (result.error) throw result.error;
+      const iconList = typeof result.data === 'string' ? JSON.parse(result.data || '[]') : (result.data || []);
+      if (iconList.length > 0) {
+        const deletedIcons = [];
+        for (const ni of iconList) {
+          if (ni.deleted_at) { deletedIcons.push(ni); continue; }
+          const idx = iconLibrary.findIndex(i => i.id === ni.id);
+          if (idx >= 0) iconLibrary[idx] = ni;
+          else iconLibrary.push(ni);
+        }
+        if (deletedIcons.length > 0) {
+          iconLibrary = iconLibrary.filter(i => !deletedIcons.find(d => d.id === i.id));
+          console.log('[同步] 图标已删除:', deletedIcons.length, '条 →', deletedIcons.map(i => i.name).join('、'));
+        }
+        const activeIcons = iconList.filter(i => !i.deleted_at);
+        synced = true;
+        console.log('[同步] 图标增量:', activeIcons.length, '条 →', activeIcons.map(i => i.name).join('、'));
+        const t = getMaxTime(iconList);
+        if (t > syncLastSyncTime) syncLastSyncTime = t;
+      } else {
+        console.log('[同步] 图标无变化');
       }
-      if (categories.length !== newCats.length) catChanged = true;
-      categories = newCats;
-      if (catChanged) { synced = true; console.log('[同步] 分类已更新 →', newCats.map(c => c.name).join('、')); }
+    } catch (e) {
+      console.warn('[同步] 图标增量失败:', e.message);
     }
     
-    // 3. 增量同步图标（表无 update_time，全量同步）
-    const { data: iconList, error: iErr } = await sb.rpc('rpc_select_icons');
-    if (!iErr && iconList) {
-      const newIcons = iconList || [];
-      const oldMap = new Map(iconLibrary.map(i => [i.id, JSON.stringify(i)]));
-      let iconChanged = false;
-      for (const ni of newIcons) {
-        if (oldMap.get(ni.id) !== JSON.stringify(ni)) iconChanged = true;
-        const idx = iconLibrary.findIndex(i => i.id === ni.id);
-        if (idx >= 0) iconLibrary[idx] = ni;
-        else { iconLibrary.push(ni); iconChanged = true; }
-      }
-      if (iconLibrary.length !== newIcons.length) iconChanged = true;
-      iconLibrary = newIcons;
-      if (iconChanged) { synced = true; console.log('[同步] 图标已更新 →', newIcons.map(i => i.name).join('、')); }
-    }
-    
-    // 用返回记录中最大的 update_time 作为 lastSyncTime，避免 Date.now() 跳过数据
     saveCache(syncLastSyncTime);
     if (synced) updateSidebar();
     console.log('[同步] 完成' + (synced ? '' : '，无变化'));
