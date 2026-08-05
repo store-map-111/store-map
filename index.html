@@ -1004,7 +1004,7 @@ async function syncFromCloud() {
     }
     
     let synced = false;
-    let syncLastSyncTime = null;
+    let syncLastSyncTime = '';  // 初始化为空字符串，确保字符串比较正常
     
     // 辅助：从记录列表中提取最大时间（含 deletedAt），统一为 ISO 格式比较
     function getMaxTime(list, field = 'updateTime') {
@@ -1149,8 +1149,10 @@ async function syncFromCloud() {
       console.warn('[同步] 图标增量失败:', e.message);
     }
     
-    await saveCache(syncLastSyncTime || lastSyncTime);
-    console.log('[同步] 保存 lastSyncTime:', syncLastSyncTime || lastSyncTime);
+    // 只有当有数据变化时才更新 lastSyncTime
+    const newLastSyncTime = syncLastSyncTime || lastSyncTime;
+    await saveCache(newLastSyncTime);
+    console.log('[同步] 保存 lastSyncTime:', newLastSyncTime);
     if (synced) updateSidebar();
     console.log('[同步] 完成' + (synced ? '' : '，无变化'));
   } catch (e) { console.warn('[同步] 增量同步失败:', e); }
