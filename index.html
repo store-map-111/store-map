@@ -1003,11 +1003,13 @@ async function syncFromCloud() {
     let synced = false;
     let syncLastSyncTime = null;
     
-    // 辅助：从记录列表中提取最大 update_time
+    // 辅助：从记录列表中提取最大时间（含 deletedAt）
     function getMaxTime(list, field = 'updateTime') {
       if (!list || list.length === 0) return '';
       return list.reduce((max, r) => {
-        const t = r[field] || '';
+        const t1 = r[field] || '';
+        const t2 = r.deletedAt || r.deleted_at || '';
+        const t = t1 > t2 ? t1 : t2;
         return t > max ? t : max;
       }, '');
     }
@@ -1141,7 +1143,7 @@ async function syncFromCloud() {
       console.warn('[同步] 图标增量失败:', e.message);
     }
     
-    saveCache(syncLastSyncTime);
+    saveCache(syncLastSyncTime || lastSyncTime);
     if (synced) updateSidebar();
     console.log('[同步] 完成' + (synced ? '' : '，无变化'));
   } catch (e) { console.warn('[同步] 增量同步失败:', e); }
