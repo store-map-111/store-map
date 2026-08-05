@@ -1010,7 +1010,7 @@ async function syncFromCloud() {
     function getMaxTime(list, field = 'updateTime') {
       if (!list || list.length === 0) return '';
       return list.reduce((max, r) => {
-        const norm = s => (s || '').replace(' ', 'T').replace('+00:00', 'Z');
+        const norm = s => (s || '').replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z');
         const t1 = norm(r[field]);
         const t2 = norm(r.deletedAt || r.deleted_at);
         const t = t1 > t2 ? t1 : t2;
