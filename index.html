@@ -994,38 +994,105 @@ async function syncFromCloud() {
   try {
     const cached = await getCachedData();
     const lastSyncTime = cached?.lastSyncTime || null;
-    if (!lastSyncTime) return; // 无缓存，不需要增量同步
+    // 严格校验：必须是非空的有效时间字符串
+    if (!lastSyncTime || typeof lastSyncTime !== 'string' || lastSyncTime.trim() === '' || isNaN(Date.parse(lastSyncTime))) {
+      console.log('[同步] lastSyncTime 无效，跳过增量同步');
+      return;
+    }
     
     let synced = false;
     
-    // 1. 增量同步门店：通过 RPC 只拉取上次同步后变化的数据
-    const { data: changedStores, error: sErr } = await sb.rpc('rpc_select_stores_since', { p_since: lastSyncTime });
-    if (!sErr && changedStores && changedStores.length > 0) {
-      const newStores = (typeof changedStores === 'string' ? JSON.parse(changedStores || '[]') : changedStores).map(r => toCamel(r, STORE_FIELD_MAP));
-      // 合并到本地：更新已有的，添加新的
-      for (const ns of newStores) {
-        const idx = storeData.findIndex(s => s.id === ns.id);
-        if (idx >= 0) storeData[idx] = ns;
-        else storeData.push(ns);
+    // 1. 增量同步门店：优先用增量 RPC，失败时 fallback 到全量 RPC + 本地 diff
+    let cloudStores = null;
+    let isIncremental = true;
+    try {
+      const result = await sb.rpc('rpc_select_stores_since', { p_since: lastSyncTime });
+      if (result.error) throw result.error;
+      cloudStores = result.data;
+      console.log('[同步] 增量查询成功，返回', Array.isArray(cloudStores) ? cloudStores.length : 0, '条');
+    } catch (e) {
+      console.warn('[同步] 增量查询失败(', e.message, ')，改用全量RPC对比...');
+      isIncremental = false;
+      try {
+        const result2 = await sb.rpc('rpc_select_stores');
+        if (result2.error) throw result2.error;
+        cloudStores = result2.data;
+        console.log('[同步] 全量RPC返回', Array.isArray(cloudStores) ? cloudStores.length : 0, '条');
+      } catch (e2) {
+        console.error('[同步] 全量RPC也失败:', e2.message);
+        cloudStores = null;
       }
-      // 加载多房东门店明细
-      for (const s of newStores) {
-        if ((s.landlordCount || 0) > 0) {
-          const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: s.id });
-          if (landlords) {
-            const idx = storeData.findIndex(x => x.id === s.id);
-            if (idx >= 0) storeData[idx].landlords = landlords;
+    }
+    
+    if (cloudStores !== null) {
+      let storeList = (typeof cloudStores === 'string' ? JSON.parse(cloudStores || '[]') : (cloudStores || [])).map(r => toCamel(r, STORE_FIELD_MAP));
+      
+      if (isIncremental) {
+        // 增量模式：返回的就是变化记录，直接合并
+        if (storeList.length > 0) {
+          for (const ns of storeList) {
+            const idx = storeData.findIndex(s => s.id === ns.id);
+            if (idx >= 0) storeData[idx] = ns;
+            else storeData.push(ns);
+          }
+          // 加载多房东门店明细
+          for (const s of storeList) {
+            if ((s.landlordCount || 0) > 0) {
+              const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: s.id });
+              if (landlords) {
+                const idx = storeData.findIndex(x => x.id === s.id);
+                if (idx >= 0) storeData[idx].landlords = landlords;
+              }
+            }
+          }
+          synced = true;
+          console.log('[同步] 门店增量:', storeList.length, '条 →', storeList.map(s => s.name).join('、'));
+        } else {
+          console.log('[同步] 门店无变化');
+        }
+      } else {
+        // 全量对比模式：逐条对比，只更新变化的
+        let changedCount = 0;
+        const changedNames = [];
+        const changedIds = new Set();
+        for (const ns of storeList) {
+          const idx = storeData.findIndex(s => s.id === ns.id);
+          if (idx >= 0) {
+            // 对比是否有变化（简单对比 updateTime）
+            if (ns.updateTime !== storeData[idx].updateTime) {
+              storeData[idx] = ns;
+              changedCount++;
+              changedNames.push(ns.name);
+              changedIds.add(ns.id);
+            }
+          } else {
+            storeData.push(ns);
+            changedCount++;
+            changedNames.push(ns.name);
+            changedIds.add(ns.id);
           }
         }
+        // 加载变化门店的多房东明细
+        for (const ns of storeList) {
+          if ((ns.landlordCount || 0) > 0 && changedIds.has(ns.id)) {
+            const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: ns.id });
+            if (landlords) {
+              const idx = storeData.findIndex(x => x.id === ns.id);
+              if (idx >= 0) storeData[idx].landlords = landlords;
+            }
+          }
+        }
+        if (changedCount > 0) {
+          synced = true;
+          console.log('[同步] 门店变化:', changedCount, '条 →', changedNames.join('、'));
+        } else {
+          console.log('[同步] 门店无变化(全量对比)');
+        }
       }
-      synced = true;
-      console.log('[同步] 门店增量:', newStores.length, '条 →', newStores.map(s => s.name).join('、'));
-    } else {
-      console.log('[同步] 门店无变化');
     }
     
     // 1b. 删除检测：仅在缓存未命中时由全量同步处理，增量同步不做删除检测
-    // （避免直接查表受 RLS 限制导致误删，删除操作请使用设置中的“全量同步”按钮）
+    // （避免直接查表受 RLS 限制导致误删，删除操作请使用设置中的"全量同步"按钮）
     
     // 2. 增量同步分类（表无 update_time，全量同步）
     const { data: catList, error: cErr } = await sb.rpc('rpc_select_categories');
@@ -1062,13 +1129,11 @@ async function syncFromCloud() {
       if (iconChanged) { synced = true; console.log('[同步] 图标已更新 →', newIcons.map(i => i.name).join('、')); }
     }
     
-    if (synced) {
-      saveCache();
-      updateSidebar();
-      console.log('[同步] 增量同步完成');
-    } else {
-      console.log('[同步] 无变化，跳过');
-    }
+    // 无论数据是否有变化，只要 RPC 调用成功就更新 lastSyncTime
+    // 这样下次同步时不会重复检查已经确认过的时间段
+    saveCache();
+    if (synced) updateSidebar();
+    console.log('[同步] 完成' + (synced ? '' : '，无变化'));
   } catch (e) { console.warn('[同步] 增量同步失败:', e); }
 }
 
