@@ -797,7 +797,7 @@ async function getCachedData() {
   } catch { return null; }
 }
 
-async function saveCache() {
+async function saveCache(lastSyncTime) {
   try {
     const db = await openCacheDB();
     return new Promise((resolve, reject) => {
@@ -809,7 +809,7 @@ async function saveCache() {
         iconLibrary: iconLibrary,
         brandColors: brandColors,
         timestamp: Date.now(),
-        lastSyncTime: new Date().toISOString()
+        lastSyncTime: lastSyncTime || new Date().toISOString()
       }, 'cache');
       tx.oncomplete = () => resolve();
       tx.onerror = e => { console.warn('[缓存] 保存失败:', e.target.error); resolve(); };
@@ -1002,6 +1002,9 @@ async function syncFromCloud() {
     
     let synced = false;
     
+    // 用返回记录中最大的 update_time 更新 lastSyncTime，确保不跳过任何数据
+    let syncLastSyncTime = null;
+    
     // 1. 增量同步门店：优先用增量 RPC，失败时 fallback 到全量 RPC + 本地 diff
     let cloudStores = null;
     let isIncremental = true;
@@ -1089,6 +1092,15 @@ async function syncFromCloud() {
           console.log('[同步] 门店无变化(全量对比)');
         }
       }
+      
+      // 用返回记录中最大的 update_time 作为 lastSyncTime，避免跳过数据
+      if (storeList.length > 0) {
+        const maxTime = storeList.reduce((max, s) => {
+          const t = s.updateTime || '';
+          return t > max ? t : max;
+        }, '');
+        if (maxTime) syncLastSyncTime = maxTime;
+      }
     }
     
     // 1b. 删除检测：仅在缓存未命中时由全量同步处理，增量同步不做删除检测
@@ -1129,9 +1141,8 @@ async function syncFromCloud() {
       if (iconChanged) { synced = true; console.log('[同步] 图标已更新 →', newIcons.map(i => i.name).join('、')); }
     }
     
-    // 无论数据是否有变化，只要 RPC 调用成功就更新 lastSyncTime
-    // 这样下次同步时不会重复检查已经确认过的时间段
-    saveCache();
+    // 用返回记录中最大的 update_time 作为 lastSyncTime，避免 Date.now() 跳过数据
+    saveCache(syncLastSyncTime);
     if (synced) updateSidebar();
     console.log('[同步] 完成' + (synced ? '' : '，无变化'));
   } catch (e) { console.warn('[同步] 增量同步失败:', e); }
