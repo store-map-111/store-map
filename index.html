@@ -308,7 +308,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
     <button class="btn" onclick="exportExcel()">📊 <span class="btn-text">导出Excel</span></button>
     <button class="btn" onclick="document.getElementById('importFile').click()">📥 <span class="btn-text">导入恢复</span></button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
-    <button class="btn" onclick="location.reload()">🔄 <span class="btn-text">刷新</span></button>
+    <button class="btn" onclick="clearCache();location.reload()">🔄 <span class="btn-text">刷新</span></button>
     <button class="btn" onclick="showSettings()">⚙️ <span class="btn-text">设置</span></button>
   </div>
 </div>
@@ -569,6 +569,10 @@ textarea.form-input { resize: vertical; min-height: 60px; }
           <label class="form-label">安全密钥 (JSAPI Security Key)</label>
           <input class="form-input" id="amapSecret" placeholder="请输入安全密钥">
         </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eee">
+          <div style="font-size:13px;color:#666;margin-bottom:8px">数据同步</div>
+          <button class="btn" onclick="fullSync()" style="width:100%">🔄 全量同步（清空缓存并从云端重新加载）</button>
+        </div>
       </div>
       <div class="settings-panel" id="panelLog">
         <div class="log-container" id="logContainer">
@@ -804,7 +808,8 @@ async function saveCache() {
         categories: categories,
         iconLibrary: iconLibrary,
         brandColors: brandColors,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        lastSyncTime: new Date().toISOString()
       }, 'cache');
       tx.oncomplete = () => resolve();
       tx.onerror = e => { console.warn('[缓存] 保存失败:', e.target.error); resolve(); };
@@ -984,29 +989,101 @@ async function loadIconLibrary() {
   return iconLibrary;
 }
 
-// 后台静默同步：从云端拉取最新数据并更新缓存（不阻塞界面）
+// 增量同步：只拉取变化的数据，合并到本地缓存
 async function syncFromCloud() {
   try {
-    const { data: storeList, error: sErr } = await sb.rpc('rpc_select_stores');
-    if (!sErr && storeList) {
-      const stores = (typeof storeList === 'string' ? JSON.parse(storeList || '[]') : (storeList || [])).map(r => toCamel(r, STORE_FIELD_MAP));
+    const cached = await getCachedData();
+    const lastSyncTime = cached?.lastSyncTime || null;
+    if (!lastSyncTime) return; // 无缓存，不需要增量同步
+    
+    let synced = false;
+    
+    // 1. 增量同步门店：只拉取上次同步后修改过的
+    const { data: changedStores, error: sErr } = await sb.from('stores').select('*').gt('update_time', lastSyncTime);
+    if (!sErr && changedStores && changedStores.length > 0) {
+      const newStores = changedStores.map(r => toCamel(r, STORE_FIELD_MAP));
+      // 合并到本地：更新已有的，添加新的
+      for (const ns of newStores) {
+        const idx = storeData.findIndex(s => s.id === ns.id);
+        if (idx >= 0) storeData[idx] = ns;
+        else storeData.push(ns);
+      }
       // 加载多房东门店明细
-      for (const s of stores) {
+      for (const s of newStores) {
         if ((s.landlordCount || 0) > 0) {
           const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: s.id });
-          if (landlords) s.landlords = landlords;
+          if (landlords) {
+            const idx = storeData.findIndex(x => x.id === s.id);
+            if (idx >= 0) storeData[idx].landlords = landlords;
+          }
         }
       }
-      storeData = stores;
+      synced = true;
+      console.log('[同步] 门店增量:', changedStores.length, '条');
     }
+    
+    // 2. 增量同步分类（表无 update_time，全量同步）
     const { data: catList, error: cErr } = await sb.rpc('rpc_select_categories');
-    if (!cErr && catList) categories = (catList || []).map(r => toCamel(r, CAT_FIELD_MAP));
+    if (!cErr && catList) {
+      const newCats = (catList || []).map(r => toCamel(r, CAT_FIELD_MAP));
+      // 对比差异，只更新变化的
+      const oldMap = new Map(categories.map(c => [c.id, JSON.stringify(c)]));
+      let catChanged = false;
+      for (const nc of newCats) {
+        if (oldMap.get(nc.id) !== JSON.stringify(nc)) catChanged = true;
+        const idx = categories.findIndex(c => c.id === nc.id);
+        if (idx >= 0) categories[idx] = nc;
+        else { categories.push(nc); catChanged = true; }
+      }
+      if (categories.length !== newCats.length) catChanged = true;
+      categories = newCats;
+      if (catChanged) { synced = true; console.log('[同步] 分类已更新'); }
+    }
+    
+    // 3. 增量同步图标（表无 update_time，全量同步）
     const { data: iconList, error: iErr } = await sb.rpc('rpc_select_icons');
-    if (!iErr && iconList) iconLibrary = iconList || [];
-    saveCache();
+    if (!iErr && iconList) {
+      const newIcons = iconList || [];
+      const oldMap = new Map(iconLibrary.map(i => [i.id, JSON.stringify(i)]));
+      let iconChanged = false;
+      for (const ni of newIcons) {
+        if (oldMap.get(ni.id) !== JSON.stringify(ni)) iconChanged = true;
+        const idx = iconLibrary.findIndex(i => i.id === ni.id);
+        if (idx >= 0) iconLibrary[idx] = ni;
+        else { iconLibrary.push(ni); iconChanged = true; }
+      }
+      if (iconLibrary.length !== newIcons.length) iconChanged = true;
+      iconLibrary = newIcons;
+      if (iconChanged) { synced = true; console.log('[同步] 图标已更新'); }
+    }
+    
+    if (synced) {
+      saveCache();
+      updateSidebar();
+      console.log('[同步] 增量同步完成');
+    } else {
+      console.log('[同步] 无变化，跳过');
+    }
+  } catch (e) { console.warn('[同步] 增量同步失败:', e); }
+}
+
+// 全量同步：清空缓存，从云端重新加载全部数据
+async function fullSync() {
+  if (!confirm('确定要全量同步吗？\n将清空本地缓存并从云端重新加载所有数据。')) return;
+  showToast('正在全量同步...', 'info');
+  await clearCache();
+  try {
+    await loadStores();
+    await loadCategories();
+    await loadIconLibrary();
+    brandColorIdx = Object.keys(brandColors).length;
     updateSidebar();
-    console.log('[同步] 后台同步完成');
-  } catch (e) { console.warn('[同步] 后台同步失败:', e); }
+    await saveCache();
+    showToast('全量同步完成', 'success');
+  } catch (e) {
+    showToast('全量同步失败，请重试', 'error');
+    console.error('[同步] 全量同步失败:', e);
+  }
 }
 
 async function saveIconToDB(data) {
@@ -1184,7 +1261,7 @@ function initMap() {
       }
       brandColorIdx = Object.keys(brandColors).length;
       updateSidebar();
-      // 后台静默同步（不阻塞界面）
+      // 增量同步：检查云端是否有变化
       syncFromCloud();
     } else {
       console.log('[缓存] 未命中，从云端加载');
