@@ -757,36 +757,67 @@ function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ========== 数据缓存 ==========
+// ========== 数据缓存（IndexedDB，容量大） ==========
 // 部署新版本时递增此版本号，触发所有用户从云端同步最新数据
 const DATA_VERSION = '20260805';
-const CACHE_KEY = 'appDataCache';
+const DB_NAME = 'StoreMapCache';
+const STORE_NAME = 'dataCache';
+let cacheDB = null;
 
-function getCachedData() {
+function openCacheDB() {
+  return new Promise((resolve, reject) => {
+    if (cacheDB) return resolve(cacheDB);
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+    };
+    req.onsuccess = e => { cacheDB = e.target.result; resolve(cacheDB); };
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function getCachedData() {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const cached = JSON.parse(raw);
-    if (cached.version === DATA_VERSION) return cached;
-    return null; // 版本不匹配，返回 null
+    const db = await openCacheDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get('cache');
+      req.onsuccess = () => {
+        const cached = req.result;
+        if (cached && cached.version === DATA_VERSION) resolve(cached);
+        else resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    });
   } catch { return null; }
 }
 
-function saveCache() {
+async function saveCache() {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      version: DATA_VERSION,
-      stores: storeData,
-      categories: categories,
-      iconLibrary: iconLibrary,
-      brandColors: brandColors,
-      timestamp: Date.now()
-    }));
+    const db = await openCacheDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put({
+        version: DATA_VERSION,
+        stores: storeData,
+        categories: categories,
+        iconLibrary: iconLibrary,
+        brandColors: brandColors,
+        timestamp: Date.now()
+      }, 'cache');
+      tx.oncomplete = () => resolve();
+      tx.onerror = e => { console.warn('[缓存] 保存失败:', e.target.error); resolve(); };
+    });
   } catch (e) { console.warn('[缓存] 保存失败:', e); }
 }
 
-function clearCache() {
-  localStorage.removeItem(CACHE_KEY);
+async function clearCache() {
+  try {
+    const db = await openCacheDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+  } catch {}
 }
 
 // ========== Supabase 云端数据操作 ==========
@@ -1124,7 +1155,7 @@ function initMap() {
   window._AMapSecurityConfig = { securityJsCode: secret || '' };
   const script = document.createElement('script');
   script.src = `https://webapi.amap.com/maps?v=2.0&key=${key}`;
-  script.onload = () => {
+  script.onload = async () => {
     console.log('[地图] AMap脚本加载成功');
     try {
       map = new AMap.Map('map', {
@@ -1141,7 +1172,7 @@ function initMap() {
       console.error('[地图] 地图创建失败:', e);
     }
     // 检查本地缓存
-    const cached = getCachedData();
+    const cached = await getCachedData();
     if (cached) {
       console.log('[缓存] 命中，使用本地数据，零流量加载');
       storeData = cached.stores || [];
