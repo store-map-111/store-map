@@ -760,14 +760,14 @@ function escHtml(str) {
 // ========== 数据缓存（IndexedDB，容量大） ==========
 // 部署新版本时递增此版本号，触发所有用户从云端同步最新数据
 const DATA_VERSION = '20260805';
-const DB_NAME = 'StoreMapCache';
+const CACHE_DB_NAME = 'StoreMapCache';
 const STORE_NAME = 'dataCache';
 let cacheDB = null;
 
 function openCacheDB() {
   return new Promise((resolve, reject) => {
     if (cacheDB) return resolve(cacheDB);
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(CACHE_DB_NAME, 1);
     req.onupgradeneeded = e => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
