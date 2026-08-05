@@ -1,5 +1,5 @@
 // 缓存版本：每次部署更新时递增此版本号，强制清理旧缓存
-const CACHE_VERSION = 'v13';
+const CACHE_VERSION = 'v14';
 const CACHE_NAME = `store-map-${CACHE_VERSION}`;
 const ASSETS = [
   './',
