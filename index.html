@@ -1140,7 +1140,8 @@ async function syncFromCloud() {
         const activeIcons = iconList.filter(i => !i.deleted_at);
         synced = true;
         console.log('[同步] 图标增量:', activeIcons.length, '条 →', activeIcons.map(i => i.name).join('、'));
-        const t = getMaxTime(iconList);
+        // 图标数据字段名是 update_time（下划线），不是 updateTime
+        const t = getMaxTime(iconList, 'update_time');
         if (t > syncLastSyncTime) syncLastSyncTime = t;
       } else {
         console.log('[同步] 图标无变化');
