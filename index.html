@@ -761,7 +761,7 @@ function escHtml(str) {
 // 部署新版本时递增此版本号，触发所有用户从云端同步最新数据
 const DATA_VERSION = '20260805';
 const CACHE_DB_NAME = 'StoreMapCache';
-const STORE_NAME = 'dataCache';
+const CACHE_STORE_NAME = 'dataCache';
 let cacheDB = null;
 
 function openCacheDB() {
@@ -770,7 +770,7 @@ function openCacheDB() {
     const req = indexedDB.open(CACHE_DB_NAME, 1);
     req.onupgradeneeded = e => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+      if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) db.createObjectStore(CACHE_STORE_NAME);
     };
     req.onsuccess = e => { cacheDB = e.target.result; resolve(cacheDB); };
     req.onerror = e => reject(e.target.error);
@@ -781,8 +781,8 @@ async function getCachedData() {
   try {
     const db = await openCacheDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const req = tx.objectStore(STORE_NAME).get('cache');
+      const tx = db.transaction(CACHE_STORE_NAME, 'readonly');
+      const req = tx.objectStore(CACHE_STORE_NAME).get('cache');
       req.onsuccess = () => {
         const cached = req.result;
         if (cached && cached.version === DATA_VERSION) resolve(cached);
@@ -797,8 +797,8 @@ async function saveCache() {
   try {
     const db = await openCacheDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).put({
+      const tx = db.transaction(CACHE_STORE_NAME, 'readwrite');
+      tx.objectStore(CACHE_STORE_NAME).put({
         version: DATA_VERSION,
         stores: storeData,
         categories: categories,
@@ -815,8 +815,8 @@ async function saveCache() {
 async function clearCache() {
   try {
     const db = await openCacheDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).clear();
+    const tx = db.transaction(CACHE_STORE_NAME, 'readwrite');
+    tx.objectStore(CACHE_STORE_NAME).clear();
   } catch {}
 }
 
