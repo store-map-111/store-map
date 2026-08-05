@@ -1024,6 +1024,7 @@ async function syncFromCloud() {
       if (result.error) throw result.error;
       storeList = (typeof result.data === 'string' ? JSON.parse(result.data || '[]') : (result.data || [])).map(r => toCamel(r, STORE_FIELD_MAP));
       console.log('[同步] 门店增量查询成功，返回', storeList.length, '条');
+      if (storeList.length > 0) console.log('[同步] 原始数据:', storeList.map(s => ({ id: s.id, name: s.name, updateTime: s.updateTime, deletedAt: s.deletedAt })));
     } catch (e) {
       console.warn('[同步] 门店增量查询失败(', e.message, ')，改用全量RPC对比...');
       try {
@@ -1083,6 +1084,7 @@ async function syncFromCloud() {
         console.log('[同步] 门店增量:', activeStores.length, '条 →', activeStores.map(s => s.name).join('、'));
       }
       const t = getMaxTime(storeList);
+      console.log('[同步] getMaxTime 结果:', t, '(syncLastSyncTime:', syncLastSyncTime, ')');
       if (t > syncLastSyncTime) syncLastSyncTime = t;
     } else {
       console.log('[同步] 门店无变化');
