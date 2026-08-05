@@ -994,6 +994,7 @@ async function syncFromCloud() {
   try {
     const cached = await getCachedData();
     const lastSyncTime = cached?.lastSyncTime || null;
+    console.log('[同步] lastSyncTime:', JSON.stringify(lastSyncTime), '| cached存在:', !!cached, '| stores数量:', cached?.stores?.length || 0);
     // 严格校验：必须是非空的有效时间字符串
     if (!lastSyncTime || typeof lastSyncTime !== 'string' || lastSyncTime.trim() === '' || isNaN(Date.parse(lastSyncTime))) {
       console.log('[同步] lastSyncTime 无效，跳过增量同步');
