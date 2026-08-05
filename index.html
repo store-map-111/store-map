@@ -1019,7 +1019,19 @@ async function syncFromCloud() {
         }
       }
       synced = true;
-      console.log('[同步] 门店增量:', changedStores.length, '条');
+      console.log('[同步] 门店增量:', changedStores.length, '条 →', newStores.map(s => s.name).join('、'));
+    }
+    
+    // 1b. 检测已删除的门店：本地有但云端没有的
+    const { data: allStoreIds, error: idErr } = await sb.from('stores').select('id');
+    if (!idErr && allStoreIds) {
+      const cloudIds = new Set(allStoreIds.map(r => r.id));
+      const deletedStores = storeData.filter(s => !cloudIds.has(s.id));
+      if (deletedStores.length > 0) {
+        storeData = storeData.filter(s => cloudIds.has(s.id));
+        synced = true;
+        console.log('[同步] 门店已删除:', deletedStores.length, '条 →', deletedStores.map(s => s.name).join('、'));
+      }
     }
     
     // 2. 增量同步分类（表无 update_time，全量同步）
@@ -1037,7 +1049,7 @@ async function syncFromCloud() {
       }
       if (categories.length !== newCats.length) catChanged = true;
       categories = newCats;
-      if (catChanged) { synced = true; console.log('[同步] 分类已更新'); }
+      if (catChanged) { synced = true; console.log('[同步] 分类已更新 →', newCats.map(c => c.name).join('、')); }
     }
     
     // 3. 增量同步图标（表无 update_time，全量同步）
@@ -1054,7 +1066,7 @@ async function syncFromCloud() {
       }
       if (iconLibrary.length !== newIcons.length) iconChanged = true;
       iconLibrary = newIcons;
-      if (iconChanged) { synced = true; console.log('[同步] 图标已更新'); }
+      if (iconChanged) { synced = true; console.log('[同步] 图标已更新 →', newIcons.map(i => i.name).join('、')); }
     }
     
     if (synced) {
