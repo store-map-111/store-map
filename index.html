@@ -2188,7 +2188,7 @@ function toggleCategoryVisible(catId) {
         }).filter(Boolean);
         
         if (storeMarkers.length > 0) {
-          map.setFitView(storeMarkers, false, [100, 100, 100, 100]); // 上下左右各留100px边距
+          map.setFitView(storeMarkers, false, [75, 75, 75, 75]); // 上下左右各留75px边距
         }
       } catch (e) {
         console.error('[地图] setFitView 失败:', e.message);
