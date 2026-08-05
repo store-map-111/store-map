@@ -757,6 +757,38 @@ function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// ========== 数据缓存 ==========
+// 部署新版本时递增此版本号，触发所有用户从云端同步最新数据
+const DATA_VERSION = '20260805';
+const CACHE_KEY = 'appDataCache';
+
+function getCachedData() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (cached.version === DATA_VERSION) return cached;
+    return null; // 版本不匹配，返回 null
+  } catch { return null; }
+}
+
+function saveCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      version: DATA_VERSION,
+      stores: storeData,
+      categories: categories,
+      iconLibrary: iconLibrary,
+      brandColors: brandColors,
+      timestamp: Date.now()
+    }));
+  } catch (e) { console.warn('[缓存] 保存失败:', e); }
+}
+
+function clearCache() {
+  localStorage.removeItem(CACHE_KEY);
+}
+
 // ========== Supabase 云端数据操作 ==========
 // 字段映射：app驼峰 → 数据库蛇形
 const STORE_FIELD_MAP = {
@@ -921,6 +953,31 @@ async function loadIconLibrary() {
   return iconLibrary;
 }
 
+// 后台静默同步：从云端拉取最新数据并更新缓存（不阻塞界面）
+async function syncFromCloud() {
+  try {
+    const { data: storeList, error: sErr } = await sb.rpc('rpc_select_stores');
+    if (!sErr && storeList) {
+      const stores = (typeof storeList === 'string' ? JSON.parse(storeList || '[]') : (storeList || [])).map(r => toCamel(r, STORE_FIELD_MAP));
+      // 加载多房东门店明细
+      for (const s of stores) {
+        if ((s.landlordCount || 0) > 0) {
+          const { data: landlords } = await sb.rpc('rpc_select_landlords', { p_store_id: s.id });
+          if (landlords) s.landlords = landlords;
+        }
+      }
+      storeData = stores;
+    }
+    const { data: catList, error: cErr } = await sb.rpc('rpc_select_categories');
+    if (!cErr && catList) categories = (catList || []).map(r => toCamel(r, CAT_FIELD_MAP));
+    const { data: iconList, error: iErr } = await sb.rpc('rpc_select_icons');
+    if (!iErr && iconList) iconLibrary = iconList || [];
+    saveCache();
+    updateSidebar();
+    console.log('[同步] 后台同步完成');
+  } catch (e) { console.warn('[同步] 后台同步失败:', e); }
+}
+
 async function saveIconToDB(data) {
   console.log('[图标库] 保存图标:', data.id, data.name, 'data长度:', data.data?.length || 0);
   // 只插入表里实际存在的字段
@@ -1083,15 +1140,33 @@ function initMap() {
     } catch(e) {
       console.error('[地图] 地图创建失败:', e);
     }
-    loadStores().then(stores => {
-      return loadCategories();
-    }).then(() => {
-      return loadIconLibrary();
-    }).then(() => {
-      // 初始化品牌颜色索引
+    // 检查本地缓存
+    const cached = getCachedData();
+    if (cached) {
+      console.log('[缓存] 命中，使用本地数据，零流量加载');
+      storeData = cached.stores || [];
+      categories = cached.categories || [];
+      iconLibrary = cached.iconLibrary || [];
+      if (cached.brandColors) {
+        brandColors = cached.brandColors;
+        localStorage.setItem('brandColors', JSON.stringify(brandColors));
+      }
       brandColorIdx = Object.keys(brandColors).length;
       updateSidebar();
-    });
+      // 后台静默同步（不阻塞界面）
+      syncFromCloud();
+    } else {
+      console.log('[缓存] 未命中，从云端加载');
+      loadStores().then(() => {
+        return loadCategories();
+      }).then(() => {
+        return loadIconLibrary();
+      }).then(() => {
+        brandColorIdx = Object.keys(brandColors).length;
+        updateSidebar();
+        saveCache(); // 首次加载后保存缓存
+      });
+    }
     setTimeout(() => {
       const tip = document.getElementById('mapTip');
       tip.style.opacity = '1';
@@ -1427,6 +1502,7 @@ async function saveStore() {
   if (existIdx >= 0) { storeData[existIdx] = data; if (visibleStores.has(data.id)) { removeMarker(data.id); addMarker(data); } }
   else storeData.push(data);
   updateSidebar();
+  saveCache();
   closeModal('storeModal');
   showToast(editingId ? '门店信息已更新' : '门店添加成功', 'success');
 }
@@ -1440,6 +1516,7 @@ async function deleteStore() {
   storeData = storeData.filter(s => s.id !== editingId);
   markDirty();
   updateSidebar();
+  saveCache();
   closeModal('storeModal');
   showToast('门店已删除', 'info');
 }
@@ -1613,6 +1690,7 @@ async function saveCategory() {
   await saveCatToDB(data);
   categories.push(data);
   updateSidebar();
+  saveCache();
   closeModal('categoryModal');
   showToast('分类已保存', 'success');
 }
@@ -1634,6 +1712,7 @@ async function deleteCategory() {
   }
   categories = categories.filter(c => !allCatIds.includes(c.id));
   updateSidebar();
+  saveCache();
   closeModal('categoryModal');
   showToast('分类已删除', 'info');
 }
@@ -2482,6 +2561,7 @@ async function importData(event) {
     brandColorIdx = Object.keys(brandColors).length;
     refreshMarkers();
     updateSidebar();
+    saveCache();
     showToast(`成功导入 ${storeCount} 家门店、${catCount} 个分类、${iconCount} 个图标`, 'success');
     writeLog('导入恢复', `${storeCount}家门店、${catCount}个分类、${iconCount}个图标`);
   } catch (e) {
@@ -2677,6 +2757,7 @@ async function handleIconPickerUpload(event) {
     await saveIconToDB(iconData);
     console.log('[图标上传] saveIconToDB 完成, 当前iconLibrary数量:', iconLibrary.length);
     iconLibrary.push(iconData);
+    saveCache();
     document.getElementById('storeCustomIcon').value = base64;
     document.getElementById('customIconPreview').src = base64;
     document.getElementById('customIconPreview').style.display = '';
@@ -2691,6 +2772,7 @@ async function deleteIconFromLib(iconId) {
   if (!confirm('确定删除此图标？')) return;
   await deleteIconFromDB(iconId);
   iconLibrary = iconLibrary.filter(i => i.id !== iconId);
+  saveCache();
   renderIconPickerGrid();
 }
 
