@@ -998,10 +998,10 @@ async function syncFromCloud() {
     
     let synced = false;
     
-    // 1. 增量同步门店：只拉取上次同步后修改过的
-    const { data: changedStores, error: sErr } = await sb.from('stores').select('*').gt('update_time', lastSyncTime);
+    // 1. 增量同步门店：通过 RPC 只拉取上次同步后变化的数据
+    const { data: changedStores, error: sErr } = await sb.rpc('rpc_select_stores_since', { p_since: lastSyncTime });
     if (!sErr && changedStores && changedStores.length > 0) {
-      const newStores = changedStores.map(r => toCamel(r, STORE_FIELD_MAP));
+      const newStores = (typeof changedStores === 'string' ? JSON.parse(changedStores || '[]') : changedStores).map(r => toCamel(r, STORE_FIELD_MAP));
       // 合并到本地：更新已有的，添加新的
       for (const ns of newStores) {
         const idx = storeData.findIndex(s => s.id === ns.id);
@@ -1019,7 +1019,9 @@ async function syncFromCloud() {
         }
       }
       synced = true;
-      console.log('[同步] 门店增量:', changedStores.length, '条 →', newStores.map(s => s.name).join('、'));
+      console.log('[同步] 门店增量:', newStores.length, '条 →', newStores.map(s => s.name).join('、'));
+    } else {
+      console.log('[同步] 门店无变化');
     }
     
     // 1b. 删除检测：仅在缓存未命中时由全量同步处理，增量同步不做删除检测
