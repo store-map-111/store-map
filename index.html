@@ -1022,17 +1022,8 @@ async function syncFromCloud() {
       console.log('[同步] 门店增量:', changedStores.length, '条 →', newStores.map(s => s.name).join('、'));
     }
     
-    // 1b. 检测已删除的门店：本地有但云端没有的
-    const { data: allStoreIds, error: idErr } = await sb.from('stores').select('id');
-    if (!idErr && allStoreIds) {
-      const cloudIds = new Set(allStoreIds.map(r => r.id));
-      const deletedStores = storeData.filter(s => !cloudIds.has(s.id));
-      if (deletedStores.length > 0) {
-        storeData = storeData.filter(s => cloudIds.has(s.id));
-        synced = true;
-        console.log('[同步] 门店已删除:', deletedStores.length, '条 →', deletedStores.map(s => s.name).join('、'));
-      }
-    }
+    // 1b. 删除检测：仅在缓存未命中时由全量同步处理，增量同步不做删除检测
+    // （避免直接查表受 RLS 限制导致误删，删除操作请使用设置中的“全量同步”按钮）
     
     // 2. 增量同步分类（表无 update_time，全量同步）
     const { data: catList, error: cErr } = await sb.rpc('rpc_select_categories');
@@ -1262,7 +1253,7 @@ function initMap() {
     }
     // 检查本地缓存
     const cached = await getCachedData();
-    if (cached) {
+    if (cached && cached.stores && cached.stores.length > 0) {
       console.log('[缓存] 命中，使用本地数据，零流量加载');
       storeData = cached.stores || [];
       categories = cached.categories || [];
