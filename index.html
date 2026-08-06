@@ -2743,49 +2743,36 @@ async function importData(event) {
       cats = parsed.categories || [];
       icons = parsed.iconLibrary || [];
     }
-    
-    // 直接恢复本地缓存，不依赖云端
-    storeData = stores.map(r => toCamel(r, STORE_FIELD_MAP));
-    categories = cats.map(r => toCamel(r, CAT_FIELD_MAP));
-    iconLibrary = icons;
-    
+    let storeCount = 0, catCount = 0, iconCount = 0;
+    for (const item of icons) {
+      if (item.id && item.data) { await saveIconToDB(item); iconCount++; }
+    }
+    for (const item of cats) {
+      if (item.id && item.name) { await saveCatToDB(item, true); catCount++; }
+    }
+    for (const item of stores) {
+      if (item.id && item.name && item.lng && item.lat) { await saveToDB(item); storeCount++; }
+    }
+    // 恢复房东明细
+    const landlordMap = parsed.landlords || {};
+    for (const storeId in landlordMap) {
+      const rows = landlordMap[storeId].map((r, i) => ({...r, sort_order: i}));
+      await sb.rpc('rpc_upsert_landlords', { p_store_id: storeId, p_rows: JSON.stringify(rows) });
+    }
+    storeData = []; categories = []; iconLibrary = [];
+    await loadStores();
+    await loadCategories();
+    await loadIconLibrary();
     // 恢复品牌颜色
     storeData.forEach(s => {
       if (s.brand && s.brandColor) setBrandColor(s.brand, s.brandColor);
     });
     brandColorIdx = Object.keys(brandColors).length;
-    
-    // 保存到本地缓存
-    await saveCache();
-    
-    // 刷新界面
     refreshMarkers();
     updateSidebar();
-    
-    showToast(`成功导入 ${stores.length} 家门店、${cats.length} 个分类、${icons.length} 个图标到本地缓存`, 'success');
-    
-    // 尝试同步到云端（如果 Supabase 可用）
-    try {
-      let storeCount = 0, catCount = 0, iconCount = 0;
-      for (const item of icons) {
-        if (item.id && item.data) { await saveIconToDB(item); iconCount++; }
-      }
-      for (const item of cats) {
-        if (item.id && item.name) { await saveCatToDB(item, true); catCount++; }
-      }
-      for (const item of stores) {
-        if (item.id && item.name && item.lng && item.lat) { await saveToDB(item); storeCount++; }
-      }
-      // 恢复房东明细
-      const landlordMap = parsed.landlords || {};
-      for (const storeId in landlordMap) {
-        const rows = landlordMap[storeId].map((r, i) => ({...r, sort_order: i}));
-        await sb.rpc('rpc_upsert_landlords', { p_store_id: storeId, p_rows: JSON.stringify(rows) });
-      }
-      writeLog('导入恢复', `${storeCount}家门店、${catCount}个分类、${iconCount}个图标`);
-    } catch (syncErr) {
-      console.warn('[导入] 云端同步失败，数据已保存到本地缓存:', syncErr);
-    }
+    saveCache();
+    showToast(`成功导入 ${storeCount} 家门店、${catCount} 个分类、${iconCount} 个图标`, 'success');
+    writeLog('导入恢复', `${storeCount}家门店、${catCount}个分类、${iconCount}个图标`);
   } catch (e) {
     showToast('导入失败：文件格式不正确', 'error');
   }
