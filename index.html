@@ -2734,7 +2734,6 @@ async function importData(event) {
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    // Support both old format (array) and new format (object with stores+categories)
     let stores, cats, icons;
     if (Array.isArray(parsed)) {
       stores = parsed; cats = []; icons = [];
@@ -2743,6 +2742,30 @@ async function importData(event) {
       cats = parsed.categories || [];
       icons = parsed.iconLibrary || [];
     }
+    // 第一步：直接从 JSON 恢复本地数据，不依赖云端
+    storeData = stores.filter(s => s.id && s.name && s.lng && s.lat).map(r => toCamel(r, STORE_FIELD_MAP));
+    categories = cats.filter(c => c.id && c.name).map(r => toCamel(r, CAT_FIELD_MAP));
+    iconLibrary = icons.filter(i => i.id && i.data);
+    // 恢复品牌颜色
+    storeData.forEach(s => {
+      if (s.brand && s.brandColor) setBrandColor(s.brand, s.brandColor);
+    });
+    brandColorIdx = Object.keys(brandColors).length;
+    // 保存本地缓存、刷新界面
+    saveCache();
+    refreshMarkers();
+    updateSidebar();
+    showToast(`已恢复 ${storeData.length} 家门店、${categories.length} 个分类、${iconLibrary.length} 个图标到本地`, 'success');
+    // 第二步：后台静默同步到云端（不影响使用）
+    syncImportToCloud(parsed, stores, cats, icons);
+  } catch (e) {
+    showToast('导入失败：文件格式不正确', 'error');
+  }
+  event.target.value = '';
+}
+
+async function syncImportToCloud(parsed, stores, cats, icons) {
+  try {
     let storeCount = 0, catCount = 0, iconCount = 0;
     for (const item of icons) {
       if (item.id && item.data) { await saveIconToDB(item); iconCount++; }
@@ -2753,30 +2776,15 @@ async function importData(event) {
     for (const item of stores) {
       if (item.id && item.name && item.lng && item.lat) { await saveToDB(item); storeCount++; }
     }
-    // 恢复房东明细
     const landlordMap = parsed.landlords || {};
     for (const storeId in landlordMap) {
       const rows = landlordMap[storeId].map((r, i) => ({...r, sort_order: i}));
       await sb.rpc('rpc_upsert_landlords', { p_store_id: storeId, p_rows: JSON.stringify(rows) });
     }
-    storeData = []; categories = []; iconLibrary = [];
-    await loadStores();
-    await loadCategories();
-    await loadIconLibrary();
-    // 恢复品牌颜色
-    storeData.forEach(s => {
-      if (s.brand && s.brandColor) setBrandColor(s.brand, s.brandColor);
-    });
-    brandColorIdx = Object.keys(brandColors).length;
-    refreshMarkers();
-    updateSidebar();
-    saveCache();
-    showToast(`成功导入 ${storeCount} 家门店、${catCount} 个分类、${iconCount} 个图标`, 'success');
-    writeLog('导入恢复', `${storeCount}家门店、${catCount}个分类、${iconCount}个图标`);
-  } catch (e) {
-    showToast('导入失败：文件格式不正确', 'error');
+    writeLog('导入恢复', `${storeCount}家门店、${catCount}个分类、${iconCount}个图标已同步云端`);
+  } catch (syncErr) {
+    console.warn('[导入] 云端同步失败，数据已保存在本地:', syncErr);
   }
-  event.target.value = '';
 }
 
 // ========== 设置 ==========
