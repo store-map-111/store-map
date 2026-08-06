@@ -368,7 +368,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
         <div class="brand-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <input class="form-input" id="storeBrand" placeholder="如：瑞幸咖啡、星巴克、蜜雪冰城" style="flex:1;min-width:140px;" oninput="updateBrandColorPreview()">
           <div id="brandColorPreview" style="width:28px;height:28px;border-radius:6px;border:2px solid #d9d9d9;flex-shrink:0;display:none;"></div>
-          <div id="brandColorSwatches" style="display:flex;gap:4px;">
+          <div id="brandColorSwatches" style="display:flex;gap:4px;flex-wrap:wrap;">
             <span style="width:22px;height:22px;border-radius:4px;background:#1677ff;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#1677ff')"></span>
             <span style="width:22px;height:22px;border-radius:4px;background:#ff4d4f;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#ff4d4f')"></span>
             <span style="width:22px;height:22px;border-radius:4px;background:#52c41a;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#52c41a')"></span>
@@ -377,6 +377,14 @@ textarea.form-input { resize: vertical; min-height: 60px; }
             <span style="width:22px;height:22px;border-radius:4px;background:#13c2c2;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#13c2c2')"></span>
             <span style="width:22px;height:22px;border-radius:4px;background:#eb2f96;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#eb2f96')"></span>
             <span style="width:22px;height:22px;border-radius:4px;background:#faad14;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#faad14')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#00bcd4;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#00bcd4')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#8bc34a;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#8bc34a')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#ff5722;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#ff5722')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#607d8b;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#607d8b')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#795548;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#795548')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#e91e63;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#e91e63')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#3f51b5;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#3f51b5')"></span>
+            <span style="width:22px;height:22px;border-radius:4px;background:#009688;cursor:pointer;border:2px solid transparent;" onclick="pickBrandColor('#009688')"></span>
           </div>
         </div>
       </div>
@@ -484,6 +492,9 @@ textarea.form-input { resize: vertical; min-height: 60px; }
               <span onclick="document.getElementById('storeColor').value='#52c41a'" style="width:22px;height:22px;background:#52c41a;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
               <span onclick="document.getElementById('storeColor').value='#fa8c16'" style="width:22px;height:22px;background:#fa8c16;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
               <span onclick="document.getElementById('storeColor').value='#722ed1'" style="width:22px;height:22px;background:#722ed1;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+              <span onclick="document.getElementById('storeColor').value='#13c2c2'" style="width:22px;height:22px;background:#13c2c2;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+              <span onclick="document.getElementById('storeColor').value='#eb2f96'" style="width:22px;height:22px;background:#eb2f96;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
+              <span onclick="document.getElementById('storeColor').value='#faad14'" style="width:22px;height:22px;background:#faad14;border-radius:50%;cursor:pointer;border:2px solid #ddd;display:inline-block;"></span>
             </div>
           </div>
         </div>
@@ -752,7 +763,7 @@ let collapsedCats = {};
 let visibleStores = new Set();
 let clickTimer = null;
 let brandColors = JSON.parse(localStorage.getItem('brandColors') || '{}');
-const BRAND_PALETTE = ['#1677ff','#ff4d4f','#52c41a','#fa8c16','#722ed1','#13c2c2','#eb2f96','#faad14','#2f54eb','#a0d911','#f5222d','#1890ff'];
+const BRAND_PALETTE = ['#1677ff','#ff4d4f','#52c41a','#fa8c16','#722ed1','#13c2c2','#eb2f96','#faad14','#00bcd4','#8bc34a','#ff5722','#607d8b','#795548','#e91e63','#3f51b5','#009688','#2f54eb','#a0d911','#f5222d','#1890ff'];
 let brandColorIdx = 0;
 
 // ========== 安全工具 ==========
