@@ -756,6 +756,7 @@ let markers = [];
 let storeData = [];
 let currentClickLngLat = null;
 let editingId = null;
+let editingCatId = null;
 let currentLandlords = [];
 let categories = [];
 let iconLibrary = [];
@@ -1856,6 +1857,7 @@ async function editStore(id) {
 
 // ========== 分类管理 ==========
 function showAddCategory(parentId) {
+  editingCatId = null;
   document.getElementById('catModalTitle').textContent = '新建分类';
   document.getElementById('btnDeleteCat').style.display = 'none';
   document.getElementById('catName').value = '';
@@ -1867,6 +1869,7 @@ function showAddCategory(parentId) {
 function showEditCategory(id) {
   const cat = categories.find(c => c.id === id);
   if (!cat) return;
+  editingCatId = id;
   document.getElementById('catModalTitle').textContent = '编辑分类';
   document.getElementById('btnDeleteCat').style.display = 'inline-flex';
   document.getElementById('catName').value = cat.name;
@@ -1887,15 +1890,31 @@ async function saveCategory() {
   const name = document.getElementById('catName').value.trim();
   if (!name) { showToast('请输入分类名称', 'error'); return; }
   const parentId = document.getElementById('catParent').value || '';
-  const siblings = categories.filter(c => c.parentId === parentId);
-  const data = {
-    id: Date.now().toString(),
-    name,
-    parentId,
-    sortOrder: siblings.length
-  };
-  await saveCatToDB(data);
-  categories.push(data);
+  if (editingCatId) {
+    // 编辑模式：更新现有分类
+    const cat = categories.find(c => c.id === editingCatId);
+    if (cat) {
+      cat.name = name;
+      cat.parentId = parentId;
+      cat.updateTime = new Date().toISOString();
+      await saveCatToDB(cat);
+      writeLog('编辑分类', name);
+    }
+    editingCatId = null;
+  } else {
+    // 新建模式
+    const siblings = categories.filter(c => c.parentId === parentId);
+    const data = {
+      id: Date.now().toString(),
+      name,
+      parentId,
+      sortOrder: siblings.length,
+      updateTime: new Date().toISOString()
+    };
+    await saveCatToDB(data);
+    categories.push(data);
+    writeLog('新增分类', name);
+  }
   updateSidebar();
   saveCache();
   closeModal('categoryModal');
@@ -1918,6 +1937,7 @@ async function deleteCategory() {
     }
   }
   categories = categories.filter(c => !allCatIds.includes(c.id));
+  editingCatId = null;
   updateSidebar();
   saveCache();
   closeModal('categoryModal');
