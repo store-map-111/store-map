@@ -2641,6 +2641,39 @@ function collapseAllCats() {
 }
 
 // ========== 导出/导入 ==========
+// 备份加密（AES-GCM，固定密钥）
+const BK_MAGIC = [0x53,0x4D,0x42,0x4B,0x31]; // 'SMBK1'
+const _BK_P = [115,109,50,48,50,54,95,98,97,99,107,117,112,95,75,51,121,55,119,82,53,110,84,56,109,90,50,118,88];
+const _BK_S = [115,116,111,114,101,109,97,112,95,115,97,108,116,95,50,48,50,54];
+let _bkKey = null;
+async function getBackupKey() {
+  if (_bkKey) return _bkKey;
+  const pass = String.fromCharCode(..._BK_P);
+  const salt = new TextEncoder().encode(String.fromCharCode(..._BK_S));
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  _bkKey = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  return _bkKey;
+}
+async function encryptBackup(jsonStr) {
+  const key = await getBackupKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(jsonStr));
+  const out = new Uint8Array(BK_MAGIC.length + iv.length + ct.byteLength);
+  out.set(BK_MAGIC, 0);
+  out.set(iv, BK_MAGIC.length);
+  out.set(new Uint8Array(ct), BK_MAGIC.length + iv.length);
+  return out;
+}
+async function decryptBackup(buf) {
+  const bytes = new Uint8Array(buf);
+  if (bytes.length < BK_MAGIC.length + 12 + 16 || BK_MAGIC.some((b, i) => bytes[i] !== b)) throw new Error('not-encrypted');
+  const key = await getBackupKey();
+  const iv = bytes.slice(BK_MAGIC.length, BK_MAGIC.length + 12);
+  const ct = bytes.slice(BK_MAGIC.length + 12);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new TextDecoder().decode(pt);
+}
+
 async function exportData() {
   if (storeData.length === 0 && categories.length === 0) { showToast('暂无数据可导出', 'error'); return; }
   // 收集多房东门店的明细
@@ -2652,7 +2685,14 @@ async function exportData() {
     }
   }
   const data = { stores: storeData, categories: categories, iconLibrary: iconLibrary, landlords: landlordMap, exportTime: new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  let blob;
+  try {
+    const encrypted = await encryptBackup(JSON.stringify(data));
+    blob = new Blob([encrypted], { type: 'application/octet-stream' });
+  } catch (e) {
+    console.warn('[备份] 加密失败，改为明文导出:', e);
+    blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -2763,7 +2803,15 @@ async function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    const text = await file.text();
+    const buf = await file.arrayBuffer();
+    let text;
+    try {
+      text = await decryptBackup(buf);
+    } catch (decErr) {
+      showToast('导入失败：不是有效的加密备份文件', 'error');
+      event.target.value = '';
+      return;
+    }
     const parsed = JSON.parse(text);
     let stores, cats, icons;
     if (Array.isArray(parsed)) {
@@ -2790,7 +2838,7 @@ async function importData(event) {
     // 第二步：后台静默同步到云端（不影响使用）
     syncImportToCloud(parsed, stores, cats, icons);
   } catch (e) {
-    showToast('导入失败：文件格式不正确', 'error');
+    showToast('导入失败：备份文件已损坏', 'error');
   }
   event.target.value = '';
 }
