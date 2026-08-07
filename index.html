@@ -318,7 +318,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   <!-- 侧边栏 -->
   <div class="sidebar" id="sidebar">
     <div class="stats-bar" id="statsBar" style="flex-wrap:wrap;gap:6px;padding:10px 16px;">
-      <div id="statBrands" style="display:flex;flex-wrap:wrap;gap:6px;width:100%"></div>
+      <div id="statBrands" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%"></div>
     </div>
     <div class="sidebar-header">
       <input class="search-box" type="text" placeholder="🔍 搜索门店名称..." oninput="filterStores(this.value)">
@@ -2123,8 +2123,8 @@ function updateSidebar() {
     brandCount[brand] = (brandCount[brand] || 0) + 1;
   });
   const brandEntries = Object.entries(brandCount).sort((a, b) => b[1] - a[1]);
-  const brandHtml = brandEntries.map(([name, count]) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:#f0f5ff;color:#1677ff;border-radius:20px;font-size:13px;font-weight:500;white-space:nowrap;"><span>${escHtml(name)}</span><span style="background:#1677ff;color:#fff;padding:1px 8px;border-radius:10px;font-size:12px;">${count}</span></span>`).join('');
-  document.getElementById('statBrands').innerHTML = brandHtml || '<span style="color:#bbb;font-size:13px;">暂无数据</span>';
+  const brandHtml = brandEntries.map(([name, count]) => `<span style="display:flex;align-items:center;justify-content:center;gap:3px;padding:4px 6px;background:#f0f5ff;color:#1677ff;border-radius:16px;font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="overflow:hidden;text-overflow:ellipsis;">${escHtml(name)}</span><span style="background:#1677ff;color:#fff;padding:0 6px;border-radius:8px;font-size:10px;flex-shrink:0;">${count}</span></span>`).join('');
+  document.getElementById('statBrands').innerHTML = brandHtml || '<span style="color:#bbb;font-size:11px;grid-column:1/-1;text-align:center;">暂无数据</span>';
 }
 
 function renderStoreItem(s) {
