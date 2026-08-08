@@ -915,13 +915,13 @@ function lockSensitive() {
   // 刷新界面
   updateSidebar();
   refreshMarkers(); // 刷新 marker 以更新悬浮信息
-  // 如果详情弹窗打开，刷新详情
+  // 如果详情弹窗打开，刷新详情（不重新打开）
   const detailModal = document.getElementById('detailModal');
-  if (detailModal && detailModal.style.display !== 'none') {
+  if (detailModal && detailModal.classList.contains('show')) {
     const storeId = detailModal.dataset.storeId;
     if (storeId) {
       const store = storeData.find(s => s.id === storeId);
-      if (store) showDetail(store);
+      if (store) showDetail(store, true);
     }
   }
   showToast('敏感数据已自动锁定', 'info');
@@ -2037,7 +2037,7 @@ async function deleteStore() {
 }
 
 // ========== 详情展示 ==========
-async function showDetail(store) {
+async function showDetail(store, skipOpen) {
   document.getElementById('detailTitle').textContent = store.name;
   // 保存 storeId 用于自动锁定后刷新
   document.getElementById('detailModal').dataset.storeId = store.id;
@@ -2102,7 +2102,7 @@ async function showDetail(store) {
   html += '</div>';
   document.getElementById('detailBody').innerHTML = html;
   document.getElementById('btnEdit').onclick = () => { closeModal('detailModal'); editStore(store.id); };
-  openModal('detailModal');
+  if (!skipOpen) openModal('detailModal');
 }
 
 async function editStore(id) {
