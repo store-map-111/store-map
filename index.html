@@ -990,13 +990,13 @@ async function hashPin(pin) {
 // 检查是否需要设置 PIN（首次使用）
 async function checkPinSetup() {
   try {
-    const { data, error } = await sb.rpc('rpc_verify_pin', { p_pin_hash: 'test' });
+    const { data, error } = await sb.rpc('rpc_pin_exists');
     if (error) {
       console.warn('[PIN] 检查失败:', error.message);
       return;
     }
-    // 如果返回 false 且没有错误，说明未设置 PIN
-    if (data === false) {
+    // 如果返回 false，说明未设置 PIN
+    if (!data) {
       openModal('pinSetModal');
     }
   } catch (e) {
