@@ -274,15 +274,37 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .login-box .login-btn:hover { background: #4096ff; }
 .login-box .login-error { color: #ff4d4f; font-size: 13px; text-align: center; margin-top: 12px; min-height: 20px; }
 
+/* 更多菜单（通用样式） */
+.header-actions .more-btn { display: none; }
+.header-actions .more-menu {
+  display: none; position: absolute; top: 100%; right: 0; margin-top: 4px;
+  background: #fff; border: 1px solid #e8e8e8; border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15); min-width: 160px; z-index: 300;
+  padding: 4px 0;
+}
+.header-actions .more-menu.show { display: block; }
+.header-actions .more-menu .menu-item {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  font-size: 14px; color: #333; cursor: pointer; border: none; background: none;
+  width: 100%; text-align: left;
+}
+.header-actions .more-menu .menu-item:hover { background: #f5f5f5; }
+
 /* 手机端适配 */
 .sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.4); z-index: 199; display: none; }
 .sidebar-overlay.show { display: block; }
 @media (max-width: 768px) {
   .header { height: 48px; padding: 0 10px; }
   .header h1 { font-size: 14px; white-space: nowrap; }
-  .header-actions { gap: 4px; }
+  .header-actions { gap: 4px; position: relative; }
   .header-actions .btn { padding: 6px 8px; font-size: 12px; }
   .header-actions .btn span.btn-text { display: none; }
+  /* 手机端：隐藏桌面按钮，显示更多菜单 */
+  .header-actions .desktop-only { display: none !important; }
+  .header-actions .more-btn { display: inline-flex !important; position: relative; }
+  .header-actions .more-menu { display: none; }
+  .header-actions .more-menu.show { display: block; }
+  .header-actions .more-menu .menu-item span.btn-text { display: inline; }
   .main { height: calc(100vh - 48px); }
   .sidebar {
     position: fixed; top: 48px; left: 0; bottom: 0; z-index: 200;
@@ -310,12 +332,20 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   <div class="header-actions">
     <button class="btn" onclick="toggleSidebar()">☰ <span class="btn-text">门店列表</span></button>
     <button class="btn sensitive-lock-btn" id="sensitiveLockBtn" onclick="toggleSensitiveLock()" title="敏感数据保护">🔒 <span class="btn-text">敏感数据</span></button>
-    <button class="btn" onclick="exportData()">📤 <span class="btn-text">导出备份</span></button>
-    <button class="btn" onclick="exportExcel()">📊 <span class="btn-text">导出Excel</span></button>
-    <button class="btn" onclick="document.getElementById('importFile').click()">📥 <span class="btn-text">导入恢复</span></button>
+    <button class="btn desktop-only" onclick="exportData()">📤 <span class="btn-text">导出备份</span></button>
+    <button class="btn desktop-only" onclick="exportExcel()">📊 <span class="btn-text">导出Excel</span></button>
+    <button class="btn desktop-only" onclick="document.getElementById('importFile').click()">📥 <span class="btn-text">导入恢复</span></button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
-    <button class="btn" onclick="clearCache();location.reload()">🔄 <span class="btn-text">刷新</span></button>
-    <button class="btn" onclick="showSettings()">⚙️ <span class="btn-text">设置</span></button>
+    <button class="btn desktop-only" onclick="clearCache();location.reload()">🔄 <span class="btn-text">刷新</span></button>
+    <button class="btn desktop-only" onclick="showSettings()">⚙️ <span class="btn-text">设置</span></button>
+    <button class="btn more-btn" onclick="toggleMoreMenu(event)">⋮ <span class="btn-text">更多</span></button>
+    <div class="more-menu" id="moreMenu">
+      <button class="menu-item" onclick="exportData();closeMoreMenu()">📤 <span class="btn-text">导出备份</span></button>
+      <button class="menu-item" onclick="exportExcel();closeMoreMenu()">📊 <span class="btn-text">导出Excel</span></button>
+      <button class="menu-item" onclick="document.getElementById('importFile').click();closeMoreMenu()">📥 <span class="btn-text">导入恢复</span></button>
+      <button class="menu-item" onclick="clearCache();location.reload()"> <span class="btn-text">刷新</span></button>
+      <button class="menu-item" onclick="showSettings();closeMoreMenu()">⚙️ <span class="btn-text">设置</span></button>
+    </div>
   </div>
 </div>
 
@@ -2918,6 +2948,23 @@ function toggleSidebar() {
     sidebar.classList.toggle('collapsed');
   }
 }
+
+// 更多菜单
+function toggleMoreMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('moreMenu');
+  menu.classList.toggle('show');
+}
+function closeMoreMenu() {
+  const menu = document.getElementById('moreMenu');
+  if (menu) menu.classList.remove('show');
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('moreMenu');
+  if (menu && !e.target.closest('.more-btn') && !e.target.closest('.more-menu')) {
+    menu.classList.remove('show');
+  }
+});
 
 function expandAllCats() {
   collapsedCats = {};
