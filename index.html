@@ -993,11 +993,11 @@ function updateSensitiveLockBtn() {
   const btn = document.getElementById('sensitiveLockBtn');
   if (!btn) return;
   if (isSensitiveUnlocked()) {
-    btn.innerHTML = '🔓 <span class="btn-text">已解锁</span>';
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#52c41a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg> <span class="btn-text">已解锁</span>';
     btn.classList.add('unlocked');
     btn.classList.remove('locked');
   } else {
-    btn.innerHTML = '🔒 <span class="btn-text">敏感数据</span>';
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fa8c16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> <span class="btn-text">敏感数据</span>';
     btn.classList.add('locked');
     btn.classList.remove('unlocked');
   }
