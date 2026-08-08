@@ -256,6 +256,11 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .toast.error { border-left: 3px solid #ff4d4f; }
 .toast.info { border-left: 3px solid #1677ff; }
 
+/* 敏感数据锁定 */
+.sensitive-lock-btn { position: relative; }
+.sensitive-masked { color: #bbb !important; font-family: monospace; letter-spacing: 2px; }
+.sensitive-input-mask { -webkit-text-security: disc; text-security: disc; }
+
 /* 登录页面 */
 .login-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .login-box { background: #fff; border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
@@ -304,6 +309,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   <h1>🏪 门店信息管理系统</h1>
   <div class="header-actions">
     <button class="btn" onclick="toggleSidebar()">☰ <span class="btn-text">门店列表</span></button>
+    <button class="btn sensitive-lock-btn" id="sensitiveLockBtn" onclick="toggleSensitiveLock()" title="敏感数据保护">🔒 <span class="btn-text">敏感数据</span></button>
     <button class="btn" onclick="exportData()">📤 <span class="btn-text">导出备份</span></button>
     <button class="btn" onclick="exportExcel()">📊 <span class="btn-text">导出Excel</span></button>
     <button class="btn" onclick="document.getElementById('importFile').click()">📥 <span class="btn-text">导入恢复</span></button>
@@ -625,6 +631,52 @@ textarea.form-input { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
+<!-- PIN 验证弹窗 -->
+<div class="modal-overlay" id="pinVerifyModal">
+  <div class="modal" style="width:360px">
+    <div class="modal-header">
+      <h2>🔒 验证敏感数据访问</h2>
+      <button class="modal-close" onclick="closeModal('pinVerifyModal')">✕</button>
+    </div>
+    <div class="modal-body" style="text-align:center;padding:24px;">
+      <div style="font-size:48px;margin-bottom:12px;">🔐</div>
+      <p style="font-size:14px;color:#666;margin-bottom:20px;">查看敏感信息需要验证 PIN 码</p>
+      <input class="form-input" id="pinVerifyInput" type="password" placeholder="请输入 PIN 码" onkeydown="if(event.key==='Enter')doVerifyPin()" style="text-align:center;font-size:18px;letter-spacing:8px;">
+      <div id="pinVerifyError" style="color:#ff4d4f;font-size:13px;margin-top:12px;min-height:20px;"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="btn" onclick="closeModal('pinVerifyModal')">取消</button>
+      <button class="btn btn-primary" onclick="doVerifyPin()">验证</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN 设置弹窗 -->
+<div class="modal-overlay" id="pinSetModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h2> 设置敏感数据 PIN 码</h2>
+      <button class="modal-close" onclick="closeModal('pinSetModal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:24px;">
+      <p style="font-size:13px;color:#666;margin-bottom:16px;">首次使用敏感数据保护功能，请设置一个 6 位数字 PIN 码。此 PIN 码用于查看联系人、电话、租金等敏感信息。</p>
+      <div class="form-group">
+        <label class="form-label">PIN 码（6 位数字）</label>
+        <input class="form-input" id="pinSetInput" type="password" maxlength="6" placeholder="请输入 6 位数字 PIN 码" style="font-size:18px;letter-spacing:8px;text-align:center;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">确认 PIN 码</label>
+        <input class="form-input" id="pinSetConfirm" type="password" maxlength="6" placeholder="再次输入 PIN 码" style="font-size:18px;letter-spacing:8px;text-align:center;">
+      </div>
+      <div id="pinSetError" style="color:#ff4d4f;font-size:13px;min-height:20px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('pinSetModal')">取消</button>
+      <button class="btn btn-primary" onclick="doSetPin()">确认设置</button>
+    </div>
+  </div>
+</div>
+
 <!-- 关闭备份弹窗 -->
 <div class="modal-overlay" id="backupModal">
   <div class="modal" style="width:400px">
@@ -740,6 +792,15 @@ async function doLogin() {
     if (overlay) overlay.remove();
     writeLog('登录', '登录成功');
     setTimeout(() => { initMap(); }, 300);
+    // 初始化敏感数据保护
+    setTimeout(() => {
+      checkPinSetup();
+      updateSensitiveLockBtn();
+      // 添加活动监听
+      document.addEventListener('click', onUserActivity);
+      document.addEventListener('keypress', onUserActivity);
+      document.addEventListener('scroll', onUserActivity, true);
+    }, 500);
   }
 }
 
@@ -766,6 +827,181 @@ let clickTimer = null;
 let brandColors = JSON.parse(localStorage.getItem('brandColors') || '{}');
 const BRAND_PALETTE = ['#1677ff','#ff4d4f','#52c41a','#fa8c16','#722ed1','#13c2c2','#eb2f96','#faad14','#00bcd4','#8bc34a','#ff5722','#607d8b','#795548','#e91e63','#3f51b5','#009688','#2f54eb','#a0d911','#f5222d','#1890ff'];
 let brandColorIdx = 0;
+
+// ========== 敏感数据保护 ==========
+const SENSITIVE_TIMEOUT = 10 * 60 * 1000; // 10 分钟
+let sensitivePinTimer = null;
+let pinVerifyCallback = null; // 验证成功后的回调
+
+// 检查是否已解锁
+function isSensitiveUnlocked() {
+  return sessionStorage.getItem('sensitiveUnlocked') === 'true';
+}
+
+// 掩码敏感值
+function maskValue(val) {
+  if (!val) return '-';
+  return '***';
+}
+
+// 重置 10 分钟计时器
+function resetSensitiveTimer() {
+  if (!isSensitiveUnlocked()) return;
+  clearTimeout(sensitivePinTimer);
+  sensitivePinTimer = setTimeout(() => {
+    lockSensitive();
+  }, SENSITIVE_TIMEOUT);
+}
+
+// 锁定敏感数据
+function lockSensitive() {
+  sessionStorage.setItem('sensitiveUnlocked', 'false');
+  clearTimeout(sensitivePinTimer);
+  sensitivePinTimer = null;
+  updateSensitiveLockBtn();
+  // 刷新界面
+  updateSidebar();
+  refreshMarkers(); // 刷新 marker 以更新悬浮信息
+  // 如果详情弹窗打开，刷新详情
+  const detailModal = document.getElementById('detailModal');
+  if (detailModal && detailModal.style.display !== 'none') {
+    const storeId = detailModal.dataset.storeId;
+    if (storeId) {
+      const store = storeData.find(s => s.id === storeId);
+      if (store) showDetail(store);
+    }
+  }
+  showToast('敏感数据已自动锁定', 'info');
+}
+
+// 请求解锁敏感数据
+function requestSensitiveUnlock(callback) {
+  if (isSensitiveUnlocked()) {
+    if (callback) callback();
+    return;
+  }
+  pinVerifyCallback = callback;
+  document.getElementById('pinVerifyInput').value = '';
+  document.getElementById('pinVerifyError').textContent = '';
+  openModal('pinVerifyModal');
+  setTimeout(() => document.getElementById('pinVerifyInput').focus(), 100);
+}
+
+// 验证 PIN 码
+async function doVerifyPin() {
+  const pin = document.getElementById('pinVerifyInput').value.trim();
+  if (!pin) {
+    document.getElementById('pinVerifyError').textContent = '请输入 PIN 码';
+    return;
+  }
+  try {
+    // 计算 SHA-256 哈希
+    const hash = await hashPin(pin);
+    const { data: valid, error } = await sb.rpc('rpc_verify_pin', { p_pin_hash: hash });
+    if (error) throw error;
+    if (valid) {
+      sessionStorage.setItem('sensitiveUnlocked', 'true');
+      closeModal('pinVerifyModal');
+      resetSensitiveTimer();
+      updateSensitiveLockBtn();
+      updateSidebar();
+      refreshMarkers(); // 刷新 marker 以更新悬浮信息
+      showToast('敏感数据已解锁（10 分钟后自动锁定）', 'success');
+      if (pinVerifyCallback) {
+        const cb = pinVerifyCallback;
+        pinVerifyCallback = null;
+        cb();
+      }
+    } else {
+      document.getElementById('pinVerifyError').textContent = 'PIN 码错误';
+      document.getElementById('pinVerifyInput').value = '';
+    }
+  } catch (e) {
+    document.getElementById('pinVerifyError').textContent = '验证失败：' + e.message;
+  }
+}
+
+// 设置 PIN 码
+async function doSetPin() {
+  const pin = document.getElementById('pinSetInput').value.trim();
+  const confirm = document.getElementById('pinSetConfirm').value.trim();
+  if (!pin || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+    document.getElementById('pinSetError').textContent = '请输入 6 位数字 PIN 码';
+    return;
+  }
+  if (pin !== confirm) {
+    document.getElementById('pinSetError').textContent = '两次输入的 PIN 码不一致';
+    return;
+  }
+  try {
+    const hash = await hashPin(pin);
+    const { data: success, error } = await sb.rpc('rpc_set_pin', { p_pin_hash: hash });
+    if (error) throw error;
+    if (success) {
+      closeModal('pinSetModal');
+      showToast('PIN 码设置成功', 'success');
+    } else {
+      document.getElementById('pinSetError').textContent = '设置失败';
+    }
+  } catch (e) {
+    document.getElementById('pinSetError').textContent = '设置失败：' + e.message;
+  }
+}
+
+// 计算 PIN 码的 SHA-256 哈希
+async function hashPin(pin) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 检查是否需要设置 PIN（首次使用）
+async function checkPinSetup() {
+  try {
+    const { data, error } = await sb.rpc('rpc_verify_pin', { p_pin_hash: 'test' });
+    if (error) {
+      console.warn('[PIN] 检查失败:', error.message);
+      return;
+    }
+    // 如果返回 false 且没有错误，说明未设置 PIN
+    if (data === false) {
+      openModal('pinSetModal');
+    }
+  } catch (e) {
+    console.warn('[PIN] 检查异常:', e.message);
+  }
+}
+
+// 切换敏感数据锁定状态
+function toggleSensitiveLock() {
+  if (isSensitiveUnlocked()) {
+    lockSensitive();
+  } else {
+    requestSensitiveUnlock();
+  }
+}
+
+// 活动监听（重置计时器）
+function onUserActivity() {
+  resetSensitiveTimer();
+}
+
+// 更新锁定按钮状态
+function updateSensitiveLockBtn() {
+  const btn = document.getElementById('sensitiveLockBtn');
+  if (!btn) return;
+  if (isSensitiveUnlocked()) {
+    btn.innerHTML = '🔓 <span class="btn-text">已解锁</span>';
+    btn.classList.add('unlocked');
+    btn.classList.remove('locked');
+  } else {
+    btn.innerHTML = '🔒 <span class="btn-text">敏感数据</span>';
+    btn.classList.add('locked');
+    btn.classList.remove('unlocked');
+  }
+}
 
 // ========== 安全工具 ==========
 function escHtml(str) {
@@ -1244,15 +1480,20 @@ function addLandlordRow(data) {
   const d = data || {};
   const tbody = document.getElementById('landlordBody');
   const idx = tbody.children.length;
+  const unlocked = isSensitiveUnlocked();
+  const nameType = unlocked ? 'text' : 'password';
+  const numType = unlocked ? 'number' : 'password';
+  const dateType = unlocked ? 'date' : 'text';
+  const phoneType = unlocked ? 'text' : 'password';
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input placeholder="出租人" value="${escHtml(d.landlordName)||''}" oninput="onLandlordChange()"></td>
-    <td><input type="number" placeholder="面积" value="${d.area||''}" oninput="onLandlordChange()"></td>
-    <td><input type="number" placeholder="不含税" value="${d.rent||''}" oninput="onLandlordChange()"></td>
-    <td><input type="number" placeholder="含税" value="${d.rentTax||''}" oninput="onLandlordChange()"></td>
-    <td><input type="date" value="${d.leaseStart||''}" oninput="onLandlordChange()"></td>
-    <td><input type="date" value="${d.leaseEnd||''}" oninput="onLandlordChange()"></td>
-    <td><input placeholder="电话" value="${escHtml(d.phone)||''}" oninput="onLandlordChange()"></td>
+    <td><input type="${nameType}" placeholder="出租人" value="${escHtml(d.landlordName) || ''}" oninput="onLandlordChange()"></td>
+    <td><input type="number" placeholder="面积" value="${d.area || ''}" oninput="onLandlordChange()"></td>
+    <td><input type="${numType}" placeholder="不含税" value="${d.rent || ''}" oninput="onLandlordChange()"></td>
+    <td><input type="${numType}" placeholder="含税" value="${d.rentTax || ''}" oninput="onLandlordChange()"></td>
+    <td><input type="${dateType}" value="${d.leaseStart || ''}" oninput="onLandlordChange()"></td>
+    <td><input type="${dateType}" value="${d.leaseEnd || ''}" oninput="onLandlordChange()"></td>
+    <td><input type="${phoneType}" placeholder="电话" value="${escHtml(d.phone) || ''}" oninput="onLandlordChange()"></td>
     <td><button class="btn-remove-row" onclick="removeLandlordRow(this)" title="删除">✕</button></td>`;
   tbody.appendChild(tr);
   if (!data) onLandlordChange();
@@ -1553,6 +1794,7 @@ function addMarker(store) {
   const zoom = map.getZoom();
   const { icon, offset } = createMarkerIcon(store.color || '#1677ff', store.iconStyle || 'pin', zoom, store.customIcon);
   const isMulti = (store.landlordCount || 0) > 0;
+  const unlocked = isSensitiveUnlocked();
   
   // 单房东使用 title，多房东使用 InfoWindow
   const markerOpts = {
@@ -1562,8 +1804,14 @@ function addMarker(store) {
   };
   
   if (!isMulti && !isTouchDevice) {
-    // 单房东：使用 title 属性
-    markerOpts.title = `${store.name}\n品牌：${store.brand||'-'}\n类型：${store.type||'-'}${store.subType&&store.type==='直营店'?' · '+store.subType:''}\n面积：${store.area||'-'}㎡\n不含税租金：${store.rent?'¥'+Number(store.rent).toLocaleString()+'/年':'-'}\n含税租金：${store.rentTax?'¥'+Number(store.rentTax).toLocaleString()+'/年':'-'}\n单价：${(()=>{const p=calcUnitPrice(store);return p?p+'元/㎡/月':'-';})()}\n租期：${store.leaseStart||'-'} 至 ${store.leaseEnd||'-'}\n联系人：${store.contactName||'-'}\n联系电话：${store.contactPhone||'-'}\n地址：${store.address||'未填写'}\n备注：${store.remark||'-'}`;
+    // 敏感数据掩码
+    const rentText = unlocked && store.rent ? '¥' + Number(store.rent).toLocaleString() + '/年' : maskValue(store.rent);
+    const rentTaxText = unlocked && store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + '/年' : maskValue(store.rentTax);
+    const unitPriceText = unlocked ? (() => { const p = calcUnitPrice(store); return p ? p + '元/㎡/月' : '-'; })() : maskValue(store.rent);
+    const leaseText = unlocked ? (store.leaseStart || '-') + ' 至 ' + (store.leaseEnd || '-') : maskValue(store.leaseStart);
+    const contactName = unlocked ? (store.contactName || '-') : maskValue(store.contactName);
+    const contactPhone = unlocked ? (store.contactPhone || '-') : maskValue(store.contactPhone);
+    markerOpts.title = `${store.name}\n品牌：${store.brand || '-'}\n类型：${store.type || '-'}${store.subType && store.type === '直营店' ? ' · ' + store.subType : ''}\n面积：${store.area || '-'}㎡\n不含税租金：${rentText}\n含税租金：${rentTaxText}\n单价：${unitPriceText}\n租期：${leaseText}\n联系人：${contactName}\n联系电话：${contactPhone}\n地址：${store.address || '未填写'}\n备注：${store.remark || '-'}`;
   }
   
   const marker = new AMap.Marker(markerOpts);
@@ -1582,33 +1830,39 @@ function addMarker(store) {
   // 多房东：使用 InfoWindow 显示表格（触摸设备不启用悬浮）
   if (isMulti && !isTouchDevice) {
     const unitPrice = calcUnitPrice(store);
+    // 敏感数据掩码
+    const rentText = unlocked && store.rent ? '¥' + Number(store.rent).toLocaleString() + '/年' : maskValue(store.rent);
+    const rentTaxText = unlocked && store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + '/年' : maskValue(store.rentTax);
+    const unitPriceText = unlocked && unitPrice ? unitPrice + '元/㎡/月' : maskValue(store.rent);
     let content = `<div style="padding:8px;min-width:280px;font-size:12px;">`;
     content += `<div style="font-weight:bold;font-size:14px;margin-bottom:6px;">${store.name}</div>`;
-    content += `<div>品牌：${store.brand||'-'}</div>`;
-    content += `<div>类型：${store.type||'-'}${store.subType&&store.type==='直营店'?' · '+store.subType:''}</div>`;
-    content += `<div>面积：${store.area||'-'}㎡</div>`;
-    content += `<div>不含税租金：${store.rent?'¥'+Number(store.rent).toLocaleString()+'/年':'-'}</div>`;
-    content += `<div>含税租金：${store.rentTax?'¥'+Number(store.rentTax).toLocaleString()+'/年':'-'}</div>`;
-    content += `<div>单价：${unitPrice?unitPrice+'元/㎡/月':'-'}</div>`;
+    content += `<div>品牌：${store.brand || '-'}</div>`;
+    content += `<div>类型：${store.type || '-'}${store.subType && store.type === '直营店' ? ' · ' + store.subType : ''}</div>`;
+    content += `<div>面积：${store.area || '-'}㎡</div>`;
+    content += `<div>不含税租金：${rentText}</div>`;
+    content += `<div>含税租金：${rentTaxText}</div>`;
+    content += `<div>单价：${unitPriceText}</div>`;
     
     if (store.landlords && store.landlords.length > 0) {
       content += `<div style="margin-top:8px;font-weight:bold;">租赁明细</div>`;
       content += `<table style="width:100%;border-collapse:collapse;margin:4px auto;font-size:11px;">`;
       content += `<tr style="background:#f0f5ff;"><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">出租人</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">面积</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">不含税租金</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">含税租金</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">租期</th><th style="padding:4px;border:1px solid #e8e8e8;text-align:center;">电话</th></tr>`;
       store.landlords.forEach(l => {
-        const name = l.landlord_name || '-';
+        const name = unlocked ? (l.landlord_name || '-') : maskValue(l.landlord_name);
         const area = l.area ? l.area + '㎡' : '-';
-        const rent = l.rent ? '¥' + Number(l.rent).toLocaleString() : '-';
-        const rentTax = l.rent_tax ? '¥' + Number(l.rent_tax).toLocaleString() : '-';
-        const lease = (l.lease_start && l.lease_end) ? `${l.lease_start} 至 ${l.lease_end}` : '-';
-        const phone = l.phone || '-';
+        const rent = unlocked && l.rent ? '¥' + Number(l.rent).toLocaleString() : maskValue(l.rent);
+        const rentTax = unlocked && l.rent_tax ? '¥' + Number(l.rent_tax).toLocaleString() : maskValue(l.rent_tax);
+        const leaseStart = unlocked ? (l.lease_start || '-') : maskValue(l.lease_start);
+        const leaseEnd = unlocked ? (l.lease_end || '-') : maskValue(l.lease_end);
+        const lease = (l.lease_start && l.lease_end) ? `${leaseStart} 至 ${leaseEnd}` : '-';
+        const phone = unlocked ? (l.phone || '-') : maskValue(l.phone);
         content += `<tr><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${name}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${area}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${rent}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${rentTax}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${lease}</td><td style="padding:4px;border:1px solid #e8e8e8;text-align:center;">${phone}</td></tr>`;
       });
       content += `</table>`;
     }
     
-    content += `<div style="margin-top:6px;">地址：${store.address||'未填写'}</div>`;
-    content += `<div>备注：${store.remark||'-'}</div>`;
+    content += `<div style="margin-top:6px;">地址：${store.address || '未填写'}</div>`;
+    content += `<div>备注：${store.remark || '-'}</div>`;
     content += `</div>`;
     
     const infoWindow = new AMap.InfoWindow({
@@ -1732,42 +1986,62 @@ async function deleteStore() {
 // ========== 详情展示 ==========
 async function showDetail(store) {
   document.getElementById('detailTitle').textContent = store.name;
+  // 保存 storeId 用于自动锁定后刷新
+  document.getElementById('detailModal').dataset.storeId = store.id;
   const isMulti = (store.landlordCount || 0) > 0;
+  const unlocked = isSensitiveUnlocked();
+  const maskCls = !unlocked ? ' sensitive-masked' : '';
   let html = '<div class="detail-card">';
   html += `<div class="detail-row"><div class="detail-label">地址</div><div class="detail-value">${escHtml(store.address) || '-'}</div></div>`;
   if (store.contactName || store.contactPhone) {
-    html += `<div class="detail-row"><div class="detail-label">联系人</div><div class="detail-value">${escHtml(store.contactName) || '-'}${store.contactPhone ? '  ' + escHtml(store.contactPhone) : ''}</div></div>`;
+    const contactName = unlocked ? escHtml(store.contactName) : maskValue(store.contactName);
+    const contactPhone = unlocked ? escHtml(store.contactPhone) : maskValue(store.contactPhone);
+    html += `<div class="detail-row"><div class="detail-label">联系人</div><div class="detail-value${maskCls}">${contactName || '-'}${store.contactPhone ? '  ' + contactPhone : ''}</div></div>`;
   }
   if (isMulti) {
     html += `<div class="detail-row"><div class="detail-label">总面积</div><div class="detail-value">${store.area ? store.area + ' ㎡' : '-'}</div></div>`;
-    html += `<div class="detail-row"><div class="detail-label">总租金(不含税)</div><div class="detail-value">${store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : '-'}</div></div>`;
-    html += `<div class="detail-row"><div class="detail-label">总租金(含税)</div><div class="detail-value">${store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : '-'}</div></div>`;
-    html += `<div class="detail-row"><div class="detail-label">单价</div><div class="detail-value">${(()=>{const p=calcUnitPrice(store);return p?p+' 元/㎡/月':'-';})()}</div></div>`;
+    const rentVal = unlocked && store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : maskValue(store.rent);
+    const rentTaxVal = unlocked && store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : maskValue(store.rentTax);
+    const unitPriceVal = unlocked ? (() => { const p = calcUnitPrice(store); return p ? p + ' 元/㎡/月' : '-'; })() : maskValue(store.rent);
+    html += `<div class="detail-row"><div class="detail-label">总租金 (不含税)</div><div class="detail-value${maskCls}">${rentVal}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">总租金 (含税)</div><div class="detail-value${maskCls}">${rentTaxVal}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">单价</div><div class="detail-value${maskCls}">${unitPriceVal}</div></div>`;
     // 加载房东明细
     const landlords = await loadLandlords(store.id);
     if (landlords.length > 0) {
       html += '<div style="margin-top:12px"><div style="font-size:13px;font-weight:500;color:#333;margin-bottom:8px;">租赁明细</div>';
       landlords.forEach((l, i) => {
-        const lease = (l.lease_start && l.lease_end) ? escHtml(l.lease_start) + ' 至 ' + escHtml(l.lease_end) : '-';
+        const landlordName = unlocked ? escHtml(l.landlord_name) : maskValue(l.landlord_name);
+        const phone = unlocked ? escHtml(l.phone) : maskValue(l.phone);
+        const leaseStart = unlocked ? escHtml(l.lease_start) : maskValue(l.lease_start);
+        const leaseEnd = unlocked ? escHtml(l.lease_end) : maskValue(l.lease_end);
+        const lease = (l.lease_start && l.lease_end) ? leaseStart + ' 至 ' + leaseEnd : '-';
+        const lRent = unlocked && l.rent ? '¥' + Number(l.rent).toLocaleString() : maskValue(l.rent);
+        const lRentTax = unlocked && l.rent_tax ? '¥' + Number(l.rent_tax).toLocaleString() : maskValue(l.rent_tax);
         html += `<div style="background:#f7f9fc;border:1px solid #e8eef8;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;">
-          <div style="font-weight:600;color:#1a1a1a;margin-bottom:6px;">${i+1}. ${escHtml(l.landlord_name)||'-'}　<span style="font-weight:400;color:#1677ff">${escHtml(l.phone)||''}</span></div>
+          <div style="font-weight:600;color:#1a1a1a;margin-bottom:6px;">${i + 1}. ${landlordName || '-'}　<span style="font-weight:400;color:#1677ff${!unlocked ? ';font-family:monospace;letter-spacing:2px;' : ''}">${phone || ''}</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:4px 16px;color:#555;">
-            <span>面积：<b style="color:#1a1a1a">${l.area?l.area+'㎡':'-'}</b></span>
-            <span>不含税：<b style="color:#1a1a1a">${l.rent?'¥'+Number(l.rent).toLocaleString():'-'}</b></span>
-            <span>含税：<b style="color:#1a1a1a">${l.rent_tax?'¥'+Number(l.rent_tax).toLocaleString():'-'}</b></span>
+            <span>面积：<b style="color:#1a1a1a">${l.area ? l.area + '㎡' : '-'}</b></span>
+            <span>不含税：<b style="color:#1a1a1a${!unlocked ? ';font-family:monospace;letter-spacing:2px;' : ''}">${lRent}</b></span>
+            <span>含税：<b style="color:#1a1a1a${!unlocked ? ';font-family:monospace;letter-spacing:2px;' : ''}">${lRentTax}</b></span>
           </div>
-          <div style="margin-top:4px;color:#555;">租期：<b style="color:#1a1a1a">${lease}</b></div>
+          <div style="margin-top:4px;color:#555;">租期：<b style="color:#1a1a1a${!unlocked ? ';font-family:monospace;letter-spacing:2px;' : ''}">${lease}</b></div>
         </div>`;
       });
       html += '</div>';
     }
   } else {
-    const leaseText = (store.leaseStart && store.leaseEnd) ? escHtml(store.leaseStart) + ' 至 ' + escHtml(store.leaseEnd) : '-';
+    const leaseStart = unlocked ? escHtml(store.leaseStart) : maskValue(store.leaseStart);
+    const leaseEnd = unlocked ? escHtml(store.leaseEnd) : maskValue(store.leaseEnd);
+    const leaseText = (store.leaseStart && store.leaseEnd) ? leaseStart + ' 至 ' + leaseEnd : '-';
     html += `<div class="detail-row"><div class="detail-label">面积</div><div class="detail-value">${store.area ? store.area + ' ㎡' : '-'}</div></div>`;
-    html += `<div class="detail-row"><div class="detail-label">不含税年租金</div><div class="detail-value">${store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : '-'}</div></div>`;
-    html += `<div class="detail-row"><div class="detail-label">含税年租金</div><div class="detail-value">${store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : '-'}</div></div>`;
-    html += `<div class="detail-row"><div class="detail-label">单价</div><div class="detail-value">${(()=>{const p=calcUnitPrice(store);return p?p+' 元/㎡/月':'-';})()}</div></div>`;
-    html += `<div class="detail-row"><div class="detail-label">租期</div><div class="detail-value">${leaseText}</div></div>`;
+    const rentVal = unlocked && store.rent ? '¥' + Number(store.rent).toLocaleString() + ' /年' : maskValue(store.rent);
+    const rentTaxVal = unlocked && store.rentTax ? '¥' + Number(store.rentTax).toLocaleString() + ' /年' : maskValue(store.rentTax);
+    const unitPriceVal = unlocked ? (() => { const p = calcUnitPrice(store); return p ? p + ' 元/㎡/月' : '-'; })() : maskValue(store.rent);
+    html += `<div class="detail-row"><div class="detail-label">不含税年租金</div><div class="detail-value${maskCls}">${rentVal}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">含税年租金</div><div class="detail-value${maskCls}">${rentTaxVal}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">单价</div><div class="detail-value${maskCls}">${unitPriceVal}</div></div>`;
+    html += `<div class="detail-row"><div class="detail-label">租期</div><div class="detail-value${maskCls}">${leaseText}</div></div>`;
   }
   html += `<div class="detail-row"><div class="detail-label">类型</div><div class="detail-value">${store.type ? escHtml(store.type) + (store.subType && store.type === '直营店' ? ' · ' + escHtml(store.subType) : '') : '-'}</div></div>`;
   html += `<div class="detail-row"><div class="detail-label">备注</div><div class="detail-value">${escHtml(store.remark) || '-'}</div></div>`;
@@ -1801,22 +2075,33 @@ async function editStore(id) {
     document.getElementById('brandColorPreview').style.display = 'none';
   }
   document.getElementById('storeAddress').value = store.address || '';
+  const unlocked = isSensitiveUnlocked();
   document.getElementById('storeContactName').value = store.contactName || '';
+  document.getElementById('storeContactName').type = unlocked ? 'text' : 'password';
   document.getElementById('storeContactPhone').value = store.contactPhone || '';
+  document.getElementById('storeContactPhone').type = unlocked ? 'text' : 'password';
   const isMulti = (store.landlordCount || 0) > 0;
   document.getElementById('multiLandlordToggle').checked = isMulti;
   if (isMulti) {
     document.getElementById('storeArea').value = store.area || '';
     document.getElementById('storeRent').value = store.rent || '';
+    document.getElementById('storeRent').type = unlocked ? 'number' : 'password';
     document.getElementById('storeRentTax').value = store.rentTax || '';
+    document.getElementById('storeRentTax').type = unlocked ? 'number' : 'password';
     document.getElementById('storeLeaseStart').value = '';
+    document.getElementById('storeLeaseStart').type = unlocked ? 'date' : 'text';
     document.getElementById('storeLeaseEnd').value = '';
+    document.getElementById('storeLeaseEnd').type = unlocked ? 'date' : 'text';
   } else {
     document.getElementById('storeArea').value = store.area || '';
     document.getElementById('storeRent').value = store.rent || '';
+    document.getElementById('storeRent').type = unlocked ? 'number' : 'password';
     document.getElementById('storeRentTax').value = store.rentTax || '';
+    document.getElementById('storeRentTax').type = unlocked ? 'number' : 'password';
     document.getElementById('storeLeaseStart').value = store.leaseStart || '';
+    document.getElementById('storeLeaseStart').type = unlocked ? 'date' : 'text';
     document.getElementById('storeLeaseEnd').value = store.leaseEnd || '';
+    document.getElementById('storeLeaseEnd').type = unlocked ? 'date' : 'text';
   }
   document.getElementById('storeType').value = store.type || '';
   document.getElementById('storeSubType').value = store.subType || '';
@@ -2149,14 +2434,19 @@ function updateSidebar() {
 
 function renderStoreItem(s) {
   const isVisible = visibleStores.has(s.id);
-  return `<div class="cat-store-item ${isVisible?'visible':''}" draggable="true" data-id="${s.id}" onclick="toggleStoreVisible('${s.id}')" oncontextmenu="showContextMenu(event,'${s.id}')">
-    <div class="cat-store-name">${isVisible?' ':''}${escHtml(s.name)}</div>
+  const unlocked = isSensitiveUnlocked();
+  // 敏感数据掩码
+  const rentText = unlocked ? (() => { const v = Number(s.rent); return (!isNaN(v) && v > 0) ? v.toLocaleString() + '元' : '-'; })() : maskValue(s.rent);
+  const rentTaxText = unlocked ? (() => { const v = Number(s.rentTax); return (!isNaN(v) && v > 0) ? v.toLocaleString() + '元' : '-'; })() : maskValue(s.rentTax);
+  const unitPriceText = unlocked ? (() => { const p = calcUnitPrice(s); return p ? p + '元/㎡/月' : '-'; })() : maskValue(s.rent);
+  return `<div class="cat-store-item ${isVisible ? 'visible' : ''}" draggable="true" data-id="${s.id}" onclick="toggleStoreVisible('${s.id}')" oncontextmenu="showContextMenu(event,'${s.id}')">
+    <div class="cat-store-name">${isVisible ? ' ' : ''}${escHtml(s.name)}</div>
     <div class="cat-store-info">
-      <div style="color:#237804">面积：${s.area ? s.area+'㎡' : '-'}</div>
-      <div style="color:#e53e3e">不含税：${(()=>{const v=Number(s.rent);return (!isNaN(v)&&v>0)?v.toLocaleString()+'元':'-';})()}，含税：${(()=>{const v=Number(s.rentTax);return (!isNaN(v)&&v>0)?v.toLocaleString()+'元':'-';})()}</div>
-      <div style="color:#e53e3e">单价：${(()=>{const p=calcUnitPrice(s);return p?p+'元/㎡/月':'-';})()}</div>
+      <div style="color:#237804">面积：${s.area ? s.area + '㎡' : '-'}</div>
+      <div style="color:#e53e3e${!unlocked ? ';font-family:monospace;letter-spacing:2px;' : ''}">不含税：${rentText}，含税：${rentTaxText}</div>
+      <div style="color:#e53e3e${!unlocked ? ';font-family:monospace;letter-spacing:2px;' : ''}">单价：${unitPriceText}</div>
     </div>
-    ${s.type ? `<span class="store-item-tag">${escHtml(s.type)}${s.subType && s.type==='直营店' ? ' · '+escHtml(s.subType) : ''}</span>` : ''}
+    ${s.type ? `<span class="store-item-tag">${escHtml(s.type)}${s.subType && s.type === '直营店' ? ' · ' + escHtml(s.subType) : ''}</span>` : ''}
   </div>`;
 }
 
@@ -2705,21 +2995,22 @@ async function exportData() {
 
 function buildStoreRow(s, catName) {
   const unitPrice = calcUnitPrice(s);
+  const unlocked = isSensitiveUnlocked();
   return {
     '门店名称': s.name || '',
     '品牌/连锁': s.brand || '',
     '地址': s.address || '',
-    '联系人': s.contactName || '',
-    '联系电话': s.contactPhone || '',
+    '联系人': unlocked ? (s.contactName || '') : maskValue(s.contactName),
+    '联系电话': unlocked ? (s.contactPhone || '') : maskValue(s.contactPhone),
     '面积(㎡)': s.area || '',
-    '不含税年租金(元)': s.rent ? Number(s.rent) : '',
-    '含税年租金(元)': s.rentTax ? Number(s.rentTax) : '',
-    '单价(元/㎡/月)': unitPrice ? Number(unitPrice) : '',
+    '不含税年租金(元)': unlocked && s.rent ? Number(s.rent) : (s.rent ? '***' : ''),
+    '含税年租金(元)': unlocked && s.rentTax ? Number(s.rentTax) : (s.rentTax ? '***' : ''),
+    '单价(元/㎡/月)': unlocked && unitPrice ? Number(unitPrice) : (unitPrice ? '***' : ''),
     '门店类型': s.type || '',
     '二级类型': (s.subType && s.type === '直营店') ? s.subType : '',
     '所属分类': catName,
-    '租期开始': s.leaseStart || '',
-    '租期结束': s.leaseEnd || '',
+    '租期开始': unlocked ? (s.leaseStart || '') : maskValue(s.leaseStart),
+    '租期结束': unlocked ? (s.leaseEnd || '') : maskValue(s.leaseEnd),
     '房东序号': 1,
     '备注': s.remark || '',
     '创建时间': s.createTime ? new Date(s.createTime).toLocaleString('zh-CN') : ''
@@ -2728,6 +3019,7 @@ function buildStoreRow(s, catName) {
 
 async function exportExcel() {
   if (storeData.length === 0) { showToast('暂无门店数据可导出', 'error'); return; }
+  const unlocked = isSensitiveUnlocked();
   // 按侧边栏顺序排序：分类层级 + 门店名自然排序
   const rootCats = categories.filter(c => !c.parentId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   const orderedStores = [];
@@ -2762,17 +3054,17 @@ async function exportExcel() {
             '门店名称': s.name || '',
             '品牌/连锁': s.brand || '',
             '地址': s.address || '',
-            '联系人': l.landlord_name || '',
-            '联系电话': l.phone || '',
+            '联系人': unlocked ? (l.landlord_name || '') : maskValue(l.landlord_name),
+            '联系电话': unlocked ? (l.phone || '') : maskValue(l.phone),
             '面积(㎡)': l.area || '',
-            '不含税年租金(元)': l.rent ? Number(l.rent) : '',
-            '含税年租金(元)': l.rent_tax ? Number(l.rent_tax) : '',
-            '单价(元/㎡/月)': storeUnitPrice ? Number(storeUnitPrice) : '',
+            '不含税年租金(元)': unlocked && l.rent ? Number(l.rent) : (l.rent ? '***' : ''),
+            '含税年租金(元)': unlocked && l.rent_tax ? Number(l.rent_tax) : (l.rent_tax ? '***' : ''),
+            '单价(元/㎡/月)': unlocked && storeUnitPrice ? Number(storeUnitPrice) : (storeUnitPrice ? '***' : ''),
             '门店类型': s.type || '',
             '二级类型': (s.subType && s.type === '直营店') ? s.subType : '',
             '所属分类': catName,
-            '租期开始': l.lease_start || '',
-            '租期结束': l.lease_end || '',
+            '租期开始': unlocked ? (l.lease_start || '') : maskValue(l.lease_start),
+            '租期结束': unlocked ? (l.lease_end || '') : maskValue(l.lease_end),
             '房东序号': idx + 1,
             '备注': s.remark || '',
             '创建时间': s.createTime ? new Date(s.createTime).toLocaleString('zh-CN') : ''
