@@ -185,6 +185,8 @@ textarea.form-input { resize: vertical; min-height: 60px; }
 .cat-header:hover { background: #f5f7fa; }
 .cat-header.cat-visible { background: #e6f4ff; }
 .cat-header.cat-visible .cat-name { color: #1677ff; }
+/* 一类下有活跃二类时的标识 */
+.cat-header.cat-has-active { border-left: 3px solid #1677ff; padding-left: 7px; }
 .cat-header.dragging { opacity: 0.4; }
 .cat-header.drag-over { background: #bcdcff !important; }
 .cat-arrow { width: 18px; font-size: 10px; color: #999; transition: transform .2s; flex-shrink: 0; text-align: center; }
@@ -2406,8 +2408,9 @@ function updateSidebar() {
       const subStoreCount = subCats.reduce((sum, sc) => sum + storeData.filter(s => s.categoryId === sc.id).length, 0);
       const totalCount = catStores.length + subStoreCount;
       const isOpen = !collapsedCats[cat.id];
+      const hasActive = hasActiveSubCat(cat.id);
       html += `<div class="cat-group" data-cat-id="${cat.id}">
-        <div class="cat-header cat-draggable ${isCategoryFullyVisible(cat.id)?'cat-visible':''}" draggable="true" data-cat-id="${cat.id}" onclick="if(dragType)return;onCatClick('${cat.id}');event.stopPropagation();" ondblclick="onCatDblClick('${cat.id}')">
+        <div class="cat-header cat-draggable ${isCategoryFullyVisible(cat.id)?'cat-visible':''}${hasActive?' cat-has-active':''}" draggable="true" data-cat-id="${cat.id}" onclick="if(dragType)return;onCatClick('${cat.id}');event.stopPropagation();" ondblclick="onCatDblClick('${cat.id}')">
           <span class="cat-arrow ${isOpen?'open':''}">▶</span>
           <span class="cat-name">${escHtml(cat.name)}</span>
           <span class="cat-count">${totalCount}</span>
@@ -2554,6 +2557,15 @@ function isCategoryFullyVisible(catId) {
   const allIds = [catId, ...subCatIds];
   const catStores = storeData.filter(s => allIds.includes(s.categoryId));
   return catStores.length > 0 && catStores.every(s => visibleStores.has(s.id));
+}
+
+// 检查一类下是否有活跃的二类（有门店显示在地图上）
+function hasActiveSubCat(catId) {
+  const subCats = categories.filter(c => c.parentId === catId);
+  return subCats.some(sc => {
+    const stores = storeData.filter(s => s.categoryId === sc.id);
+    return stores.length > 0 && stores.some(s => visibleStores.has(s.id));
+  });
 }
 
 // ========== 拖拽 ==========
