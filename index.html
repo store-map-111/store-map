@@ -601,6 +601,7 @@ textarea.form-input { resize: vertical; min-height: 60px; }
     <div class="modal-body">
       <div class="settings-tabs">
         <div class="settings-tab active" onclick="switchSettingsTab('map')">🗺️ 地图设置</div>
+        <div class="settings-tab" onclick="switchSettingsTab('account')"> 账户</div>
         <div class="settings-tab" onclick="switchSettingsTab('log')">📋 操作日志</div>
       </div>
       <div class="settings-panel active" id="panelMap">
@@ -626,6 +627,26 @@ textarea.form-input { resize: vertical; min-height: 60px; }
       <div class="settings-panel" id="panelLog">
         <div class="log-container" id="logContainer">
           <div class="log-empty">加载中...</div>
+        </div>
+      </div>
+      <div class="settings-panel" id="panelAccount">
+        <div style="padding:8px 0;">
+          <div style="font-size:13px;color:#666;margin-bottom:16px;">
+            当前账号：<strong id="accountEmail">-</strong>
+          </div>
+          <div class="form-group">
+            <label class="form-label">当前密码</label>
+            <input class="form-input" id="currentPassword" type="password" placeholder="请输入当前密码">
+          </div>
+          <div class="form-group">
+            <label class="form-label">新密码</label>
+            <input class="form-input" id="newPassword" type="password" placeholder="请输入新密码（至少 6 位）">
+          </div>
+          <div class="form-group">
+            <label class="form-label">确认新密码</label>
+            <input class="form-input" id="confirmPassword" type="password" placeholder="再次输入新密码">
+          </div>
+          <button class="btn btn-primary" onclick="changePassword()" style="width:100%;margin-top:8px;">修改密码</button>
         </div>
       </div>
     </div>
@@ -3227,15 +3248,22 @@ function showSettings() {
 
 function switchSettingsTab(tab) {
   document.querySelectorAll('.settings-tab').forEach((el, i) => {
-    el.classList.toggle('active', (tab === 'map' && i === 0) || (tab === 'log' && i === 1));
+    el.classList.toggle('active', (tab === 'map' && i === 0) || (tab === 'account' && i === 1) || (tab === 'log' && i === 2));
   });
   document.getElementById('panelMap').classList.toggle('active', tab === 'map');
+  document.getElementById('panelAccount').classList.toggle('active', tab === 'account');
   document.getElementById('panelLog').classList.toggle('active', tab === 'log');
   const saveBtn = document.getElementById('settingsSaveBtn');
   const footer = document.getElementById('settingsFooter');
-  if (tab === 'log') {
+  if (tab === 'log' || tab === 'account') {
     saveBtn.style.display = 'none';
-    loadLogs();
+    if (tab === 'log') loadLogs();
+    if (tab === 'account') {
+      const user = sb.auth.getUser();
+      user.then(({ data }) => {
+        document.getElementById('accountEmail').textContent = data?.user?.email || '-';
+      });
+    }
   } else {
     saveBtn.style.display = '';
   }
@@ -3251,6 +3279,37 @@ function saveSettings() {
   closeModal('settingsModal');
   showToast('设置已保存，正在刷新...', 'success');
   setTimeout(() => location.reload(), 800);
+}
+
+async function changePassword() {
+  const current = document.getElementById('currentPassword').value;
+  const newPwd = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('confirmPassword').value;
+  if (!current) { showToast('请输入当前密码', 'error'); return; }
+  if (!newPwd || newPwd.length < 6) { showToast('新密码至少 6 位', 'error'); return; }
+  if (newPwd === current) { showToast('新密码不能与当前密码相同', 'error'); return; }
+  if (newPwd !== confirm) { showToast('两次输入的新密码不一致', 'error'); return; }
+  try {
+    // 用 reauthenticate 验证当前身份（不产生新 session，最安全）
+    const { error: reauthError } = await sb.auth.reauthenticate();
+    if (reauthError) { showToast('身份验证失败，请重新登录后再试', 'error'); return; }
+    // 验证通过，修改密码
+    const { error: updateError } = await sb.auth.updateUser({ password: newPwd });
+    if (updateError) { showToast('修改失败：' + updateError.message, 'error'); return; }
+    writeLog('修改密码', '用户修改了登录密码');
+    showToast('密码修改成功，正在退出...', 'success');
+    // 清空输入框
+    document.getElementById('currentPassword').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+    // 2 秒后退出登录（使所有 session 失效）
+    setTimeout(async () => {
+      await sb.auth.signOut();
+      location.reload();
+    }, 2000);
+  } catch (e) {
+    showToast('修改失败：' + e.message, 'error');
+  }
 }
 
 // ========== 操作日志 ==========
